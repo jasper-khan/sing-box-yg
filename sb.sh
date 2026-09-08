@@ -240,9 +240,9 @@ fi
 
 inscertificate(){
 ymzs(){
-ym_vl_re=apple.com
+ym_vl_re=foothill.edu
 echo
-blue "Vless-reality的SNI域名默认为 apple.com"
+blue "Vless-reality的SNI域名默认为 foothill.edu"
 tlsyn=true
 ym_vm_ws=$(cat /root/ygkkkca/ca.log 2>/dev/null)
 certificatec_vmess_ws='/root/ygkkkca/cert.crt'
@@ -256,9 +256,9 @@ certificatep_an='/root/ygkkkca/private.key'
 }
 
 zqzs(){
-ym_vl_re=apple.com
+ym_vl_re=foothill.edu
 echo
-blue "Vless-reality的SNI域名默认为 apple.com"
+blue "Vless-reality的SNI域名默认为 foothill.edu"
 tlsyn=false
 ym_vm_ws=www.bing.com
 certificatec_vmess_ws='/etc/s-box/cert.pem'
@@ -2587,8 +2587,8 @@ fi
 green "0：返回上层"
 readp "请选择：" menu
 if [ "$menu" = "1" ]; then
-readp "请输入vless-reality域名 (回车使用apple.com)：" menu
-ym_vl_re=${menu:-apple.com}
+readp "请输入vless-reality域名 (回车使用foothill.edu)：" menu
+ym_vl_re=${menu:-foothill.edu}
 a=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')
 b=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.reality.handshake.server')
 c=$(cat /etc/s-box/vl_reality.txt | cut -d'=' -f5 | cut -d'&' -f1)
