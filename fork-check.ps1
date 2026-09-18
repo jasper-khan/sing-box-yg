@@ -89,6 +89,13 @@ if ($lineSeds.Count) {
   $errors += "fixed-line sed edits are back ($($lineSeds.Count)); they break silently on upstream field changes"
 }
 
+# 7) client-config generation must stay removed (deleting legacy leftovers is allowed):
+#    this fork ships share links + jhsub only
+$clientGen = [regex]::Matches($text, 'cat > /etc/s-box/(sbox\.json|clmi\.yaml)|\b(sball|clall|sb_client|sbhy2ports)\s*\(\)')
+if ($clientGen.Count) {
+  $errors += "client config generation code reappeared ($($clientGen.Count) hits)"
+}
+
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1

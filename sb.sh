@@ -566,13 +566,9 @@ readp "请选择【1-2】：" menu
 if [ -z "$menu" ] || [ "$menu" = "1" ]; then
 server_ip="$v4"
 echo "$server_ip" > /etc/s-box/server_ip.log
-server_ipcl="$v4"
-echo "$server_ipcl" > /etc/s-box/server_ipcl.log
 else
 server_ip="[$v6]"
 echo "$server_ip" > /etc/s-box/server_ip.log
-server_ipcl="$v6"
-echo "$server_ipcl" > /etc/s-box/server_ipcl.log
 fi
 else
 yellow "VPS并不是双栈VPS，不支持IP配置输出的切换"
@@ -580,13 +576,9 @@ serip=$(curl -s4m5 icanhazip.com -k || curl -s6m5 icanhazip.com -k)
 if [[ "$serip" =~ : ]]; then
 server_ip="[$serip]"
 echo "$server_ip" > /etc/s-box/server_ip.log
-server_ipcl="$serip"
-echo "$server_ipcl" > /etc/s-box/server_ipcl.log
 else
 server_ip="$serip"
 echo "$server_ip" > /etc/s-box/server_ip.log
-server_ipcl="$serip"
-echo "$server_ipcl" > /etc/s-box/server_ipcl.log
 fi
 fi
 else
@@ -600,7 +592,6 @@ ym=`bash ~/.acme.sh/acme.sh --list | tail -1 | awk '{print $1}'`
 echo $ym > /root/ygkkkca/ca.log
 fi
 server_ip=$(cat /etc/s-box/server_ip.log)
-server_ipcl=$(cat /etc/s-box/server_ipcl.log)
 uuid=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].users[0].uuid')
 vl_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
 vl_name=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')
@@ -611,7 +602,6 @@ hy2_ports=$(iptables -t nat -nL --line 2>/dev/null | grep -w "$hy2_port" | awk '
 if [[ -n $hy2_ports ]]; then
 cmhy2pt=$(echo $hy2_ports | tr ':' '-')
 hyps="&mport=$cmhy2pt"
-sbhy2pt=$(echo "$hy2_ports" | grep -o '[0-9]\+:[0-9]\+' | sed 's/.*/"&"/' | paste -sd,)
 else
 hyps=
 fi
@@ -623,15 +613,9 @@ echo "$SHA256" > /etc/s-box/SHA256.txt
 SHA256=$(cat /etc/s-box/SHA256.txt)
 hy2_name=www.bing.com
 sb_hy2_ip=$server_ip
-cl_hy2_ip=$server_ipcl
-ins_hy2=1
-hy2_ins=true
 else
 hy2_name=$ym
 sb_hy2_ip=$ym
-cl_hy2_ip=$ym
-ins_hy2=0
-hy2_ins=false
 fi
 }
 
@@ -655,7 +639,6 @@ reshy2(){
 echo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=0&allowInsecure=0$hyps&sni=$hy2_name&pinSHA256=$SHA256#hy2-$hostname"
-#hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=$ins_hy2&allowInsecure=$ins_hy2$hyps&sni=$hy2_name#hy2-$hostname"
 echo "$hy2_link" > /etc/s-box/hy2.txt
 red "🚀【 Hysteria-2 】节点信息如下：" && sleep 2
 echo
@@ -666,349 +649,6 @@ echo "二维码【v2rayn、v2rayng、nekobox、小火箭shadowrocket】"
 qrencode -o - -t ANSIUTF8 "$(cat /etc/s-box/hy2.txt)"
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 echo
-}
-
-sb_client(){
-
-sbhy2ports(){
-if [[ -n $hy2_ports ]]; then
-    cat <<EOF
-  "server_ports": [ $sbhy2pt ],
-EOF
-fi
-}
-
-sball(){
-cat <<EOF
-{
-  "log": {
-    "level": "info",
-    "timestamp": true
-  },
-  "http_clients": [
-    {
-      "tag": "rule-set-direct"
-    }
-  ],
-  "dns": {
-    "servers": [
-      {
-        "type": "fakeip",
-        "tag": "fakeip",
-        "inet4_range": "198.18.0.0/15",
-        "inet6_range": "fc00::/18"
-      },
-      {
-        "type": "udp",
-        "tag": "dns-cn",
-        "server": "223.5.5.5",
-        "server_port": 53
-      },
-      {
-        "type": "https",
-        "tag": "dns-proxy",
-        "server": "dns.google",
-        "domain_resolver": "dns-cn",
-        "detour": "proxy"
-      }
-    ],
-    "rules": [
-      {
-        "rule_set": [
-          "geosite-cn"
-        ],
-        "action": "route",
-        "server": "dns-cn"
-      },
-      {
-        "query_type": [
-          "A",
-          "AAAA"
-        ],
-        "action": "route",
-        "server": "fakeip"
-      }
-    ],
-    "final": "dns-proxy",
-    "strategy": "prefer_ipv4",
-    "cache_capacity": 8192,
-    "optimistic": {
-      "enabled": true,
-      "timeout": "1h"
-    },
-    "timeout": "10s",
-    "reverse_mapping": true
-  },
-  "inbounds": [
-    {
-      "type": "tun",
-      "tag": "tun-in",
-      "address": [
-        "172.19.0.1/30",
-        "fdfe:dcba:9876::1/126"
-      ],
-      "auto_route": true,
-      "strict_route": true,
-      "stack": "gvisor",
-      "mtu": 1420
-    }
-  ],
-  "route": {
-    "default_http_client": "rule-set-direct",
-    "default_domain_resolver": "dns-cn",
-    "auto_detect_interface": true,
-    "rule_set": [
-      {
-        "tag": "geosite-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs"
-      },
-      {
-        "tag": "geoip-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs"
-      }
-    ],
-    "rules": [
-      {
-        "inbound": [
-          "tun-in"
-        ],
-        "protocol": [
-          "dns"
-        ],
-        "action": "hijack-dns"
-      },
-      {
-        "clash_mode": "Global",
-        "action": "route",
-        "outbound": "proxy"
-      },
-      {
-        "ip_is_private": true,
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "rule_set": [
-          "geosite-cn"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "rule_set": [
-          "geoip-cn"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "clash_mode": "Direct",
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "network": [
-          "tcp",
-          "udp"
-        ],
-        "port": 853,
-        "action": "reject"
-      }
-    ],
-    "final": "proxy"
-  },
-  "experimental": {
-    "cache_file": {
-      "enabled": true,
-      "store_dns": true
-    },
-    "clash_api": {
-      "external_controller": "127.0.0.1:9090",
-      "external_ui": "ui",
-      "default_mode": "Rule"
-    }
-  },
-  "outbounds": [
-    {
-      "type": "vless",
-      "tag": "vless-$hostname",
-      "server": "$server_ipcl",
-      "server_port": $vl_port,
-      "uuid": "$uuid",
-      "flow": "xtls-rprx-vision",
-      "tls": {
-        "enabled": true,
-        "server_name": "$vl_name",
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        },
-      "reality": {
-          "enabled": true,
-          "public_key": "$public_key",
-          "short_id": "$short_id"
-        }
-      }
-    },
-    {
-        "type": "hysteria2",
-        "tag": "hy2-$hostname",
-        "server": "$cl_hy2_ip",
-        "server_port": $hy2_port,
-$(sbhy2ports)
-        "password": "$uuid",
-        "tls": {
-            "enabled": true,
-            "server_name": "$hy2_name",
-            "insecure": $hy2_ins,
-            "alpn": [
-                "h3"
-            ]
-        }
-    },
-EOF
-}
-
-clall(){
-cat <<EOF
-port: 7890
-allow-lan: true
-mode: rule
-log-level: info
-unified-delay: true
-dns:
-  enable: true 
-  listen: "0.0.0.0:1053"
-  ipv6: true
-  prefer-h3: false
-  respect-rules: true
-  use-system-hosts: false
-  cache-algorithm: "arc"
-  enhanced-mode: "fake-ip"
-  fake-ip-range: "198.18.0.1/16"
-  fake-ip-filter:
-    - "+.lan"
-    - "+.local"
-    - "+.msftconnecttest.com"
-    - "+.msftncsi.com"
-    - "localhost.ptlogin2.qq.com"
-    - "localhost.sec.qq.com"
-    - "+.in-addr.arpa"
-    - "+.ip6.arpa"
-    - "time.*.com"
-    - "time.*.gov"
-    - "pool.ntp.org"
-    - "localhost.work.weixin.qq.com"
-  default-nameserver: ["223.5.5.5", "119.29.29.29"]
-  nameserver:
-    - "https://1.1.1.1/dns-query"
-    - "https://8.8.8.8/dns-query"
-  proxy-server-nameserver:
-    - "https://223.5.5.5/dns-query"
-    - "https://doh.pub/dns-query"
-
-proxies:
-- name: vless-reality-vision-$hostname               
-  type: vless
-  server: $server_ipcl                           
-  port: $vl_port                                
-  uuid: $uuid   
-  network: tcp
-  udp: true
-  tls: true
-  flow: xtls-rprx-vision
-  servername: $vl_name                 
-  reality-opts: 
-    public-key: $public_key    
-    short-id: $short_id                      
-  client-fingerprint: chrome                  
-
-- name: hysteria2-$hostname                            
-  type: hysteria2                                      
-  server: $cl_hy2_ip                               
-  port: $hy2_port
-  ports: $cmhy2pt
-  password: $uuid                          
-  alpn:
-    - h3
-  sni: $hy2_name                               
-  skip-cert-verify: $hy2_ins
-  fast-open: true
-EOF
-}
-
-cat > /etc/s-box/sbox.json <<EOF
-$(sball)
-        {
-            "tag": "proxy",
-            "type": "selector",
-			"default": "auto",
-            "outbounds": [
-        "auto",
-        "vless-$hostname",
-        "hy2-$hostname"
-            ]
-        },
-        {
-            "tag": "auto",
-            "type": "urltest",
-            "outbounds": [
-        "vless-$hostname",
-        "hy2-$hostname"
-            ],
-            "url": "http://www.gstatic.com/generate_204",
-            "interval": "10m",
-            "tolerance": 30,
-            "idle_timeout": "30m"
-        },
-        {
-            "type": "direct",
-            "tag": "direct"
-        }
-    ]
-}
-EOF
-
-cat > /etc/s-box/clmi.yaml <<EOF
-$(clall)
-
-proxy-groups:
-- name: 负载均衡
-  type: load-balance
-  url: https://www.gstatic.com/generate_204
-  interval: 300
-  strategy: round-robin
-  proxies:
-    - vless-reality-vision-$hostname                              
-    - hysteria2-$hostname
-
-- name: 自动选择
-  type: url-test
-  url: https://www.gstatic.com/generate_204
-  interval: 300
-  tolerance: 50
-  proxies:
-    - vless-reality-vision-$hostname                              
-    - hysteria2-$hostname
-    
-- name: 🌍选择代理节点
-  type: select
-  proxies:
-    - 负载均衡                                         
-    - 自动选择
-    - DIRECT
-    - vless-reality-vision-$hostname                              
-    - hysteria2-$hostname
-rules:
-  - GEOIP,LAN,DIRECT
-  - GEOSITE,CN,DIRECT
-  - GEOIP,CN,DIRECT
-  - MATCH,🌍选择代理节点
-EOF
 }
 
 instsllsingbox(){
@@ -1041,7 +681,7 @@ echo
 ipuuid
 sbshare
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-blue "可选择8，刷新并显示所有协议配置及分享链接"
+blue "可选择8，刷新并显示分享链接、聚合订阅、Gitlab订阅，或推送TG通知"
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 echo
 }
@@ -1277,59 +917,16 @@ telegram_id=$userid
 echo '#!/bin/bash
 export LANG=en_US.UTF-8
 sbnh=$(/etc/s-box/sing-box version 2>/dev/null | awk '/version/{print $NF}' 2>/dev/null | cut -d '.' -f 1,2)
-total_lines=$(wc -l < /etc/s-box/clmi.yaml)
-half=$((total_lines / 2))
-head -n $half /etc/s-box/clmi.yaml > /etc/s-box/clash_meta_client1.txt
-tail -n +$((half + 1)) /etc/s-box/clmi.yaml > /etc/s-box/clash_meta_client2.txt
-
-total_lines=$(wc -l < /etc/s-box/sbox.json)
-quarter=$((total_lines / 4))
-head -n $quarter /etc/s-box/sbox.json > /etc/s-box/sing_box_client1.txt
-tail -n +$((quarter + 1)) /etc/s-box/sbox.json | head -n $quarter > /etc/s-box/sing_box_client2.txt
-tail -n +$((2 * quarter + 1)) /etc/s-box/sbox.json | head -n $quarter > /etc/s-box/sing_box_client3.txt
-tail -n +$((3 * quarter + 1)) /etc/s-box/sbox.json > /etc/s-box/sing_box_client4.txt
-
 m1=$(cat /etc/s-box/vl_reality.txt 2>/dev/null)
 m5=$(cat /etc/s-box/hy2.txt 2>/dev/null)
-m7=$(cat /etc/s-box/sing_box_client1.txt 2>/dev/null)
-m7_5=$(cat /etc/s-box/sing_box_client2.txt 2>/dev/null)
-m7_5_5=$(cat /etc/s-box/sing_box_client3.txt 2>/dev/null)
-m7_5_5_5=$(cat /etc/s-box/sing_box_client4.txt 2>/dev/null)
-m8=$(cat /etc/s-box/clash_meta_client1.txt 2>/dev/null)
-m8_5=$(cat /etc/s-box/clash_meta_client2.txt 2>/dev/null)
-m9=$(cat /etc/s-box/sing_box_gitlab.txt 2>/dev/null)
-m10=$(cat /etc/s-box/clash_meta_gitlab.txt 2>/dev/null)
 m11=$(cat /etc/s-box/jhsub.txt 2>/dev/null)
 message_text_m1=$(echo "$m1")
 message_text_m5=$(echo "$m5")
-message_text_m7=$(echo "$m7")
-message_text_m7_5=$(echo "$m7_5")
-message_text_m7_5_5=$(echo "$m7_5_5")
-message_text_m7_5_5_5=$(echo "$m7_5_5_5")
-message_text_m8=$(echo "$m8")
-message_text_m8_5=$(echo "$m8_5")
-message_text_m9=$(echo "$m9")
-message_text_m10=$(echo "$m10")
 message_text_m11=$(echo "$m11")
 MODE=HTML
 URL="https://api.telegram.org/bottelegram_token/sendMessage"
 res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 Vless-reality-vision 分享链接 】：支持v2rayng、nekobox "$'"'"'\n\n'"'"'"${message_text_m1}")
 res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 Hysteria-2 分享链接 】：支持v2rayng、nekobox "$'"'"'\n\n'"'"'"${message_text_m5}")
-if [[ -f /etc/s-box/sing_box_gitlab.txt ]]; then
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 Sing-box 订阅链接 】：支持SFA、SFW、SFI "$'"'"'\n\n'"'"'"${message_text_m9}")
-else
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 Sing-box 配置文件(4段) 】：支持SFA、SFW、SFI "$'"'"'\n\n'"'"'"${message_text_m7}")
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=${message_text_m7_5}")
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=${message_text_m7_5_5}")
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=${message_text_m7_5_5_5}")
-fi
-
-if [[ -f /etc/s-box/clash_meta_gitlab.txt ]]; then
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 Mihomo 订阅链接 】：支持Mihomo相关客户端 "$'"'"'\n\n'"'"'"${message_text_m10}")
-else
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 Mihomo 配置文件(2段) 】：支持Mihomo相关客户端 "$'"'"'\n\n'"'"'"${message_text_m8}")
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=${message_text_m8_5}")
-fi
 res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 聚合节点 】：支持nekobox "$'"'"'\n\n'"'"'"${message_text_m11}")
 
 if [ $? == 124 ];then
@@ -1437,8 +1034,7 @@ echo
 green "请稍后…………"
 kill -15 $(pgrep -f 'websbox' 2>/dev/null) >/dev/null 2>&1
 mkdir -p /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"
-ln -sf /etc/s-box/clmi.yaml /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"/clmi.yaml
-ln -sf /etc/s-box/sbox.json /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"/sbox.json
+rm -f /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"/clmi.yaml /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"/sbox.json
 ln -sf /etc/s-box/jhsub.txt /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"/jhsub.txt
 if command -v apk >/dev/null 2>&1; then
 busybox-extras httpd -f -p "$(cat /etc/s-box/subport.log 2>/dev/null)" -h /root/websbox > /dev/null 2>&1 &
@@ -1494,7 +1090,7 @@ fi
 echo "$token" > /etc/s-box/gitlabtoken.txt
 rm -rf /etc/s-box/.git
 git init >/dev/null 2>&1
-git add sbox.json clmi.yaml jhsub.txt >/dev/null 2>&1
+git add jhsub.txt >/dev/null 2>&1
 git config --global user.email "${email}" >/dev/null 2>&1
 git config --global user.name "${userid}" >/dev/null 2>&1
 git commit -m "commit_add_$(date +"%F %T")" >/dev/null 2>&1
@@ -1513,8 +1109,6 @@ interact
 EOF
 chmod +x gitpush.sh
 ./gitpush.sh "git push -f origin main${gitlab_ml}" cat /etc/s-box/gitlabtoken.txt >/dev/null 2>&1
-echo "https://gitlab.com/api/v4/projects/${userid}%2F${project}/repository/files/sbox.json/raw?ref=${git_sk}&private_token=${token}" > /etc/s-box/sing_box_gitlab.txt
-echo "https://gitlab.com/api/v4/projects/${userid}%2F${project}/repository/files/clmi.yaml/raw?ref=${git_sk}&private_token=${token}" > /etc/s-box/clash_meta_gitlab.txt
 echo "https://gitlab.com/api/v4/projects/${userid}%2F${project}/repository/files/jhsub.txt/raw?ref=${git_sk}&private_token=${token}" > /etc/s-box/jh_sub_gitlab.txt
 clsbshow
 else
@@ -1532,9 +1126,10 @@ if [[ $(ls -a | grep '^\.git$') ]]; then
 if [ -f /etc/s-box/gitlab_ml_ml ]; then
 gitlab_ml=$(cat /etc/s-box/gitlab_ml_ml)
 fi
-git rm --cached sbox.json clmi.yaml jhsub.txt >/dev/null 2>&1
+git rm --cached jhsub.txt >/dev/null 2>&1
+git rm --cached sbox.json clmi.yaml >/dev/null 2>&1
 git commit -m "commit_rm_$(date +"%F %T")" >/dev/null 2>&1
-git add sbox.json clmi.yaml jhsub.txt >/dev/null 2>&1
+git add jhsub.txt >/dev/null 2>&1
 git commit -m "commit_add_$(date +"%F %T")" >/dev/null 2>&1
 chmod +x gitpush.sh
 ./gitpush.sh "git push -f origin main${gitlab_ml}" cat /etc/s-box/gitlabtoken.txt >/dev/null 2>&1
@@ -1546,24 +1141,6 @@ cd
 }
 
 clsbshow(){
-green "当前Sing-box节点已更新并推送"
-green "Sing-box订阅链接如下："
-blue "$(cat /etc/s-box/sing_box_gitlab.txt 2>/dev/null)"
-echo
-green "Sing-box订阅链接二维码如下："
-qrencode -o - -t ANSIUTF8 "$(cat /etc/s-box/sing_box_gitlab.txt 2>/dev/null)"
-echo
-echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-echo
-green "当前Mihomo节点配置已更新并推送"
-green "Mihomo订阅链接如下："
-blue "$(cat /etc/s-box/clash_meta_gitlab.txt 2>/dev/null)"
-echo
-green "Mihomo订阅链接二维码如下："
-qrencode -o - -t ANSIUTF8 "$(cat /etc/s-box/clash_meta_gitlab.txt 2>/dev/null)"
-echo
-echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-echo
 green "当前聚合节点配置已更新并推送"
 green "订阅链接如下："
 blue "$(cat /etc/s-box/jh_sub_gitlab.txt 2>/dev/null)"
@@ -1758,43 +1335,22 @@ echo "分享链接"
 echo -e "${yellow}$v2sub${plain}"
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 echo
-sb_client
 }
 
 clash_sb_share(){
 sbactive
 echo
-yellow "1：刷新并查看各协议分享链接、二维码、聚合节点"
-yellow "2：刷新并查看Mihomo、Sing-box客户端SFA/SFI/SFW三合一配置、Gitlab私有订阅链接"
-yellow "3：推送最新节点配置信息(选项1+选项2)到Telegram通知"
+yellow "1：刷新并查看分享链接、二维码、聚合节点、Gitlab订阅链接"
+yellow "2：推送最新节点配置信息(选项1)到Telegram通知"
 yellow "0：返回上层"
-readp "请选择【0-3】：" menu
+readp "请选择【0-2】：" menu
 if [ "$menu" = "1" ]; then
 sbshare
-elif  [ "$menu" = "2" ]; then
-green "请稍等……"
-sbshare > /dev/null 2>&1
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-red "Gitlab订阅链接如下："
+red "Gitlab聚合订阅链接如下："
 gitlabsubgo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-red "🚀Mihomo配置文件显示如下："
-red "文件目录 /etc/s-box/clmi.yaml ，复制自建以yaml文件格式为准" && sleep 2
-echo
-cat /etc/s-box/clmi.yaml
-echo
-white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-echo
-white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-red "🚀SFA/SFI/SFW配置文件显示如下："
-red "安卓SFA、苹果SFI，win电脑官方文件包SFW请到甬哥Github项目自行下载，"
-red "文件目录 /etc/s-box/sbox.json ，复制自建以json文件格式为准" && sleep 2
-echo
-cat /etc/s-box/sbox.json
-echo
-white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-echo
-elif [ "$menu" = "3" ]; then
+elif [ "$menu" = "2" ]; then
 tgnotice
 else
 sb
@@ -1827,8 +1383,6 @@ if ps -ef 2>/dev/null | grep "$showsubport" | grep -v grep >/dev/null; then
 showsubtoken=$(cat /etc/s-box/subtoken.log 2>/dev/null)
 subip=$(cat /etc/s-box/server_ip.log 2>/dev/null)
 suburl="$subip:$showsubport/$showsubtoken"
-echo "Clash/Mihomo本地IP订阅地址：http://$suburl/clmi.yaml"
-echo "Sing-box本地IP订阅地址：http://$suburl/sbox.json"
 echo "聚合协议本地IP订阅地址：http://$suburl/jhsub.txt"
 fi
 fi
@@ -1872,7 +1426,7 @@ green " 5. 关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"
 green " 7. 更新/切换/指定 Sing-box 内核版本"
 white "----------------------------------------------------------------------------------"
-green " 8. 刷新并查看节点 【Mihomo/SFA+SFI+SFW三合一配置/订阅链接/推送TG通知】"
+green " 8. 刷新并查看节点 【分享链接/聚合订阅/Gitlab订阅/推送TG通知】"
 green " 9. 查看 Sing-box 运行日志"
 green "10. 一键原版BBR+FQ加速"
 green "11. 管理 Acme 申请域名IP证书"
