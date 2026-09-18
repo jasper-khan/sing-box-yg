@@ -49,9 +49,9 @@
 * WARP 相关功能同样已删除：wireguard 出站、WARP-plus-Socks5、CFwarp 管理入口，以及依赖 WARP 通道的"三通道域名分流"。服务端模板现在只有 `direct`（sb10 另有 `block`）。
 * vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时提示处直接回车即可；已安装的可用菜单 `3` → `1` → `1` 更换。
 * 脚本自更新、版本检查与上面的安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
-* 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认值、服务端模板的 23/27 行对齐、自更新 URL、以及"只保留两个协议"四项不变量都还在。
+* 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认伪装域名、服务端模板结构、自更新 URL、协议范围、以及"不再按行号改配置"这些不变量都还在。
 * 服务端配置另可用 `tools/render-configs.ps1` 渲染校验（预期两个模板都只输出 `vless,hysteria2`）。
-* 从旧的多协议版本升级：必须**先卸载再重装**（菜单 2 再 1）。只点菜单 7"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`，新脚本的固定行号会作用在旧的五协议配置上而写错字段；卸载流程保留了旧版 Argo 服务与 cloudflared 定时任务的清理。
+* 从旧的多协议版本升级：必须**先卸载再重装**（菜单 2 再 1）。只点菜单 7"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`，旧配置里残留的其它协议 inbound 不会被清理；卸载流程保留了旧版 Argo/WARP/WARP-plus 服务、进程与定时任务的清理。
 
 ### 同步上游更新
 
