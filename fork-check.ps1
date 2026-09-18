@@ -62,8 +62,10 @@ if ($text -notmatch 'raw\.githubusercontent\.com/jasper-khan/sing-box-yg/main/sb
   $errors += 'no self-update URL pointing at this fork'
 }
 
-# 5) fork scope: only vless-reality + hysteria2 may remain (no vmess/tuic/anytls/argo)
-$removed = [regex]::Matches($text, '(?i)\b(vmess|tuic|anytls|argo)\b') | ForEach-Object { $_.Value } | Sort-Object -Unique
+# 5) fork scope: only vless-reality + hysteria2 may remain.
+#    Removed protocols must be gone, and the Argo tunnel feature must not come back.
+#    (uninstall may still mention legacy argo/cloudflared leftovers on purpose)
+$removed = [regex]::Matches($text, '(?i)\b(vmess|tuic|anytls)\b|cfargo|argoym|cloudflared tunnel') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($removed) {
   $errors += "removed protocol code reappeared: $($removed -join ', ')"
 }
@@ -77,6 +79,20 @@ foreach ($name in 'sb10', 'sb11') {
   $types = [regex]::Matches($tmpl.Groups[1].Value, '"type"\s*:\s*"([a-z0-9]+)"') | ForEach-Object { $_.Groups[1].Value }
   $present = @($types | Where-Object { $_ -in @('vless', 'hysteria2') })
   if ($present.Count -lt 2) { $errors += "$name template lost vless/hysteria2 inbound" }
+}
+
+# 6) fixed line numbers the vless/hy2 flows write to must still hold the same keys
+$critical = @{ 14 = 'listen_port'; 23 = 'server_name'; 27 = 'server'; 41 = 'listen_port'; 53 = 'certificate_path'; 54 = 'key_path' }
+foreach ($name in 'sb10', 'sb11') {
+  $tmpl = [regex]::Match($text, "(?ms)^cat > /etc/s-box/$name\.json <<EOF\r?\n(.*?)^EOF\r?$")
+  if (-not $tmpl.Success) { continue }
+  $body = $tmpl.Groups[1].Value -split '\r?\n'
+  foreach ($ln in $critical.Keys) {
+    $line = $body[$ln - 1]
+    if (-not $line -or $line -notmatch ('"' + [regex]::Escape($critical[$ln]) + '"\s*:')) {
+      $errors += "$name line $ln no longer holds $($critical[$ln])"
+    }
+  }
 }
 
 if ($errors.Count) {
