@@ -96,6 +96,14 @@ if ($clientGen.Count) {
   $errors += "client config generation code reappeared ($($clientGen.Count) hits)"
 }
 
+# 8) firewall-disabling install flow must stay removed; print actual inbound ports instead.
+if ($text -match '\bopenyn\b|systemctl\s+stop\s+firewalld|ufw\s+disable') {
+  $errors += 'firewall-disabling install flow reappeared'
+}
+if ($text -notmatch 'Vless-reality：TCP \$port_vl_re' -or
+    $text -notmatch 'Hysteria-2：UDP \$port_hy2') {
+  $errors += 'install no longer prints the VLESS/Hysteria2 inbound port reminder'
+}
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1

@@ -46,6 +46,7 @@
 ### 本 fork 说明（仅 vless-reality + hysteria2，默认伪装域名 = foothill.edu）
 
 * 只有两个协议：vless-reality 与 hysteria2。vmess-ws/Argo、tuic5、anytls 已从脚本中删除（服务端 inbound、客户端配置、订阅分享、菜单、端口、卸载逻辑均不含这三种协议）。
+* 安装时不再询问或关闭服务器防火墙；端口确定后直接提示 VPS 防火墙/云安全组需要放行的 VLESS TCP 与 Hysteria2 UDP 入站端口。
 * WARP 相关功能同样已删除：wireguard 出站、WARP-plus-Socks5、CFwarp 管理入口，以及依赖 WARP 通道的"三通道域名分流"。服务端模板现在只有 `direct`（sb10 另有 `block`）。
 * 不再生成客户端配置文件：原 `sbox.json`（sing-box 客户端）与 `clmi.yaml`（Mihomo/Clash）的生成、分段推送、软链与 GitLab 发布已全部删除。订阅只提供两个协议的分享链接与聚合订阅 `jhsub.txt`（本地 IP 订阅、GitLab、TG 推送都只推这些）。
 * vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时提示处直接回车即可；已安装的可用菜单 `3` → `1` → `1` 更换。

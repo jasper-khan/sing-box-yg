@@ -150,40 +150,6 @@ ipv=prefer_ipv4
 fi
 }
 
-close(){
-systemctl stop firewalld.service >/dev/null 2>&1
-systemctl disable firewalld.service >/dev/null 2>&1
-setenforce 0 >/dev/null 2>&1
-ufw disable >/dev/null 2>&1
-iptables -P INPUT ACCEPT >/dev/null 2>&1
-iptables -P FORWARD ACCEPT >/dev/null 2>&1
-iptables -P OUTPUT ACCEPT >/dev/null 2>&1
-iptables -t mangle -F >/dev/null 2>&1
-iptables -F >/dev/null 2>&1
-iptables -X >/dev/null 2>&1
-netfilter-persistent save >/dev/null 2>&1
-if [[ -n $(apachectl -v 2>/dev/null) ]]; then
-systemctl stop httpd.service >/dev/null 2>&1
-systemctl disable httpd.service >/dev/null 2>&1
-service apache2 stop >/dev/null 2>&1
-systemctl disable apache2 >/dev/null 2>&1
-fi
-sleep 1
-green "执行开放端口，关闭防火墙完毕"
-}
-
-openyn(){
-red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-readp "是否开放端口，关闭防火墙？\n1、是，执行 (回车默认)\n2、否，跳过！自行处理\n请选择【1-2】：" action
-if [[ -z $action ]] || [[ "$action" = "1" ]]; then
-close
-elif [[ "$action" = "2" ]]; then
-echo
-else
-red "输入错误,请重新选择" && openyn
-fi
-}
-
 inssb(){
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 green "使用哪个内核版本？"
@@ -304,8 +270,8 @@ port_hy2=$port
 insport(){
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 green "三、设置各个协议端口"
-yellow "1：自动生成每个协议的随机端口 (10000-65535范围内)，回车默认。请确保VPS后台已开放所有端口"
-yellow "2：自定义每个协议端口。请确保VPS后台已开放指定的端口"
+yellow "1：自动生成每个协议的随机端口 (10000-65535范围内)，回车默认"
+yellow "2：自定义每个协议端口"
 readp "请输入【1-2】：" port
 if [ -z "$port" ] || [ "$port" = "1" ] ; then
 ports=()
@@ -329,6 +295,9 @@ echo
 blue "各协议端口确认如下"
 blue "Vless-reality端口：$port_vl_re"
 blue "Hysteria-2端口：$port_hy2"
+yellow "请在 VPS 防火墙与云安全组放行以下入站流量："
+yellow "Vless-reality：TCP $port_vl_re"
+yellow "Hysteria-2：UDP $port_hy2"
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 green "四、自动生成各个协议统一的uuid (密码)"
 uuid=$(/etc/s-box/sing-box generate uuid)
@@ -657,7 +626,6 @@ red "已安装Sing-box服务，无法再次安装" && exit
 fi
 mkdir -p /etc/s-box
 v6
-openyn
 inssb
 inscertificate
 insport
