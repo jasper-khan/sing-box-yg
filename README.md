@@ -43,6 +43,13 @@
 
 ### VPS专用一键脚本如下：快捷方式：```sb```
 
+### 本 fork 说明（vless 默认伪装域名 = foothill.edu）
+
+* 只维护 vless-reality 与 hysteria2 两个协议；vmess-ws/argo、tuic5、anytls 保持上游原样，不做额外改动。
+* vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时提示处直接回车即可；已安装的可用菜单 `3` → `1` → `1` 更换。
+* 脚本自更新、版本检查与上面的安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
+* 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认值、服务端模板的 23/27 行对齐、自更新 URL 三项不变量都还在。
+
 ```
 bash <(wget -qO- https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/sb.sh)
 ```
