@@ -1,12 +1,15 @@
 [CmdletBinding()]
 param(
-    [string]$Script = (Join-Path (Split-Path -Parent $PSScriptRoot) 'sb.sh'),
+    [string]$Script,
     [string[]]$ExpectSb10 = @('vless', 'hysteria2'),
     [string[]]$ExpectSb11 = @('vless', 'hysteria2')
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# $PSScriptRoot is not populated inside the param block on Windows PowerShell 5.1
+if (-not $Script) { $Script = Join-Path (Split-Path -Parent $PSScriptRoot) 'sb.sh' }
 
 function Stop-WithError {
     param(

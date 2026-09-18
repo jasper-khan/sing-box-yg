@@ -62,6 +62,23 @@ if ($text -notmatch 'raw\.githubusercontent\.com/jasper-khan/sing-box-yg/main/sb
   $errors += 'no self-update URL pointing at this fork'
 }
 
+# 5) fork scope: only vless-reality + hysteria2 may remain (no vmess/tuic/anytls/argo)
+$removed = [regex]::Matches($text, '(?i)\b(vmess|tuic|anytls|argo)\b') | ForEach-Object { $_.Value } | Sort-Object -Unique
+if ($removed) {
+  $errors += "removed protocol code reappeared: $($removed -join ', ')"
+}
+$staleIndex = [regex]::Matches($text, '\.inbounds\[[2-9]\]') | ForEach-Object { $_.Value } | Sort-Object -Unique
+if ($staleIndex) {
+  $errors += "stale inbound index references: $($staleIndex -join ', ')"
+}
+foreach ($name in 'sb10', 'sb11') {
+  $tmpl = [regex]::Match($text, "(?ms)^cat > /etc/s-box/$name\.json <<EOF\r?\n(.*?)^EOF\r?$")
+  if (-not $tmpl.Success) { $errors += "$name config template not found"; continue }
+  $types = [regex]::Matches($tmpl.Groups[1].Value, '"type"\s*:\s*"([a-z0-9]+)"') | ForEach-Object { $_.Groups[1].Value }
+  $present = @($types | Where-Object { $_ -in @('vless', 'hysteria2') })
+  if ($present.Count -lt 2) { $errors += "$name template lost vless/hysteria2 inbound" }
+}
+
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1
