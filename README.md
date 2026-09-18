@@ -55,8 +55,8 @@
 
 ### 同步上游更新
 
-1. `git fetch upstream && git merge upstream/main`
-2. 冲突处理原则：被删掉的协议 / Argo / WARP / 分流的代码**保持删除**；vless-reality 与 hysteria2 的改动**接受上游**。
+1. `git fetch upstream`
+2. `git merge -X ours upstream/main`：这条命令自动执行本 fork 的取舍规则——冲突处一律保留本 fork 版本（被删协议/Argo/WARP/分流的删除、`foothill.edu` 默认值、指向本 fork 的自更新 URL），未冲突的上游改动照常合并（vless-reality 与 hysteria2 的字段改动通常属于这一类，会自动进来）。
 3. 合并后依次运行：`bash -n sb.sh`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/render-configs.ps1`。
 4. 服务端配置的读写已全部改为按 jq 字段路径（`.inbounds[0]` = vless-reality、`.inbounds[1]` = hysteria2），上游增删字段不再影响这些功能；脚本中已不存在按行号改写配置的 sed，`fork-check.ps1` 会守住这一点。
 
