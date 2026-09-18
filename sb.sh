@@ -1289,8 +1289,8 @@ else
 c_c='/etc/s-box/cert.pem'
 d_d='/etc/s-box/private.key'
 fi
-echo $sbfiles | xargs -n1 sed -i "79s#$c#$c_c#"
-echo $sbfiles | xargs -n1 sed -i "80s#$d#$d_d#"
+echo $sbfiles | xargs -n1 sed -i "53s#$c#$c_c#"
+echo $sbfiles | xargs -n1 sed -i "54s#$d#$d_d#"
 restartsb && sbshare > /dev/null 2>&1
 blue "Hysteria2协议域名证书更换完毕"
 else
@@ -1380,11 +1380,11 @@ if [ "$menu" = "1" ]; then
 if [ -n "$hy2_ports" ]; then
 hy2deports
 hy2port
-echo $sbfiles | xargs -n1 sed -i "67s/$hy2_port/$port_hy2/"
+echo $sbfiles | xargs -n1 sed -i "41s/$hy2_port/$port_hy2/"
 restartsb && sbshare > /dev/null 2>&1
 else
 hy2port
-echo $sbfiles | xargs -n1 sed -i "67s/$hy2_port/$port_hy2/"
+echo $sbfiles | xargs -n1 sed -i "41s/$hy2_port/$port_hy2/"
 restartsb && sbshare > /dev/null 2>&1
 fi
 blue "Hysteria2端口更改完成"
@@ -1443,7 +1443,7 @@ if [[ "$sbnh" == "1.10" ]]; then
 v4v6
 chip(){
 rpip=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.outbounds[0].domain_strategy')
-sed -i "111s/$rpip/$rrpip/g" /etc/s-box/sb10.json
+sed -i "62s/$rpip/$rrpip/g" /etc/s-box/sb10.json
 cp /etc/s-box/sb10.json /etc/s-box/sb.json
 restartsb
 }
@@ -1857,17 +1857,17 @@ green "最新随机生成普通warp-wireguard账户如下"
 warpwg
 echo
 readp "输入自定义Private_key：" menu
-sed -i "163s#$wgprkey#$menu#g" /etc/s-box/sb10.json
-sed -i "132s#$wgprkey#$menu#g" /etc/s-box/sb11.json
+sed -i "114s#$wgprkey#$menu#g" /etc/s-box/sb10.json
+sed -i "66s#$wgprkey#$menu#g" /etc/s-box/sb11.json
 readp "输入自定义IPV6地址：" menu
-sed -i "161s/$wgipv6/$menu/g" /etc/s-box/sb10.json
-sed -i "130s/$wgipv6/$menu/g" /etc/s-box/sb11.json
+sed -i "112s/$wgipv6/$menu/g" /etc/s-box/sb10.json
+sed -i "64s/$wgipv6/$menu/g" /etc/s-box/sb11.json
 readp "输入自定义Reserved值 (格式：数字,数字,数字)，如无值则回车跳过：" menu
 if [ -z "$menu" ]; then
 menu=0,0,0
 fi
-sed -i "165s/$wgres/$menu/g" /etc/s-box/sb10.json
-sed -i "142s/$wgres/$menu/g" /etc/s-box/sb11.json
+sed -i "116s/$wgres/$menu/g" /etc/s-box/sb10.json
+sed -i "76s/$wgres/$menu/g" /etc/s-box/sb11.json
 rm -rf /etc/s-box/sb.json
 cp /etc/s-box/sb${num}.json /etc/s-box/sb.json
 restartsb
@@ -2030,7 +2030,7 @@ else
 w4flym="$(echo "$w4flym" | sed 's/ /","/g')"
 w4flym="\"$w4flym\""
 fi
-sed -i "184s/.*/$w4flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
+sed -i "135s/.*/$w4flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
 restartsb
 changef
 elif [ "$menu" = "2" ]; then
@@ -2041,7 +2041,7 @@ else
 w4flym="$(echo "$w4flym" | sed 's/ /","/g')"
 w4flym="\"$w4flym\""
 fi
-sed -i "187s/.*/$w4flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
+sed -i "138s/.*/$w4flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
 restartsb
 changef
 else
@@ -2061,9 +2061,9 @@ else
 w6flym="$(echo "$w6flym" | sed 's/ /","/g')"
 w6flym="\"$w6flym\""
 fi
-sed -i "193s/.*/$w6flym/" /etc/s-box/sb10.json
-sed -i "184s/.*/$w6flym/" /etc/s-box/sb11.json
-sed -i "196s/.*/$w6flym/" /etc/s-box/sb11.json
+sed -i "144s/.*/$w6flym/" /etc/s-box/sb10.json
+sed -i "118s/.*/$w6flym/" /etc/s-box/sb11.json
+sed -i "130s/.*/$w6flym/" /etc/s-box/sb11.json
 cp /etc/s-box/sb${num}.json /etc/s-box/sb.json
 restartsb
 changef
@@ -2076,7 +2076,7 @@ else
 w6flym="$(echo "$w6flym" | sed 's/ /","/g')"
 w6flym="\"$w6flym\""
 fi
-sed -i "196s/.*/$w6flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
+sed -i "147s/.*/$w6flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
 restartsb
 changef
 else
@@ -2096,9 +2096,9 @@ else
 s4flym="$(echo "$s4flym" | sed 's/ /","/g')"
 s4flym="\"$s4flym\""
 fi
-sed -i "202s/.*/$s4flym/" /etc/s-box/sb10.json
-sed -i "177s/.*/$s4flym/" /etc/s-box/sb11.json
-sed -i "190s/.*/$s4flym/" /etc/s-box/sb11.json
+sed -i "153s/.*/$s4flym/" /etc/s-box/sb10.json
+sed -i "111s/.*/$s4flym/" /etc/s-box/sb11.json
+sed -i "124s/.*/$s4flym/" /etc/s-box/sb11.json
 cp /etc/s-box/sb${num}.json /etc/s-box/sb.json
 restartsb
 changef
@@ -2111,7 +2111,7 @@ else
 s4flym="$(echo "$s4flym" | sed 's/ /","/g')"
 s4flym="\"$s4flym\""
 fi
-sed -i "205s/.*/$s4flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
+sed -i "156s/.*/$s4flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
 restartsb
 changef
 else
@@ -2132,7 +2132,7 @@ else
 s6flym="$(echo "$s6flym" | sed 's/ /","/g')"
 s6flym="\"$s6flym\""
 fi
-sed -i "211s/.*/$s6flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
+sed -i "162s/.*/$s6flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
 restartsb
 changef
 elif [ "$menu" = "2" ]; then
@@ -2143,7 +2143,7 @@ else
 s6flym="$(echo "$s6flym" | sed 's/ /","/g')"
 s6flym="\"$s6flym\""
 fi
-sed -i "214s/.*/$s6flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
+sed -i "165s/.*/$s6flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
 restartsb
 changef
 else
@@ -2164,7 +2164,7 @@ else
 ad4flym="$(echo "$ad4flym" | sed 's/ /","/g')"
 ad4flym="\"$ad4flym\""
 fi
-sed -i "220s/.*/$ad4flym/" /etc/s-box/sb10.json /etc/s-box/sb.json
+sed -i "171s/.*/$ad4flym/" /etc/s-box/sb10.json /etc/s-box/sb.json
 restartsb
 changef
 elif [ "$menu" = "2" ]; then
@@ -2176,7 +2176,7 @@ else
 ad4flym="$(echo "$ad4flym" | sed 's/ /","/g')"
 ad4flym="\"$ad4flym\""
 fi
-sed -i "223s/.*/$ad4flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
+sed -i "174s/.*/$ad4flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
 restartsb
 changef
 else
@@ -2200,7 +2200,7 @@ else
 ad6flym="$(echo "$ad6flym" | sed 's/ /","/g')"
 ad6flym="\"$ad6flym\""
 fi
-sed -i "229s/.*/$ad6flym/" /etc/s-box/sb10.json /etc/s-box/sb.json
+sed -i "180s/.*/$ad6flym/" /etc/s-box/sb10.json /etc/s-box/sb.json
 restartsb
 changef
 elif [ "$menu" = "2" ]; then
@@ -2212,7 +2212,7 @@ else
 ad6flym="$(echo "$ad6flym" | sed 's/ /","/g')"
 ad6flym="\"$ad6flym\""
 fi
-sed -i "232s/.*/$ad6flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
+sed -i "183s/.*/$ad6flym/" /etc/s-box/sb.json /etc/s-box/sb10.json
 restartsb
 changef
 else
@@ -2584,8 +2584,8 @@ done
 fi
 s5port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.outbounds[] | select(.type == "socks") | .server_port')
 [[ "$sbnh" == "1.10" ]] && num=10 || num=11
-sed -i "127s/$s5port/$port/g" /etc/s-box/sb10.json
-sed -i "165s/$s5port/$port/g" /etc/s-box/sb11.json
+sed -i "78s/$s5port/$port/g" /etc/s-box/sb10.json
+sed -i "99s/$s5port/$port/g" /etc/s-box/sb11.json
 cp /etc/s-box/sb${num}.json /etc/s-box/sb.json
 restartsb
 }
