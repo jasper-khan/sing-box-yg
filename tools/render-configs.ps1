@@ -2,7 +2,9 @@
 param(
     [string]$Script,
     [string[]]$ExpectSb10 = @('vless', 'hysteria2'),
-    [string[]]$ExpectSb11 = @('vless', 'hysteria2')
+    [string[]]$ExpectSb11 = @('vless', 'hysteria2'),
+    [string[]]$ExpectSb10Outbounds = @('direct', 'block'),
+    [string[]]$ExpectSb11Outbounds = @('direct')
 )
 
 Set-StrictMode -Version Latest
@@ -117,6 +119,32 @@ function Convert-TemplateToJson {
     }
 }
 
+function Assert-ExactTypes {
+    param(
+        [string]$Name = '',
+        [string]$Kind = '',
+        [string[]]$Expected = @(),
+        [string[]]$Actual = @()
+    )
+
+    Write-Host ("{0} {1}s: {2}" -f $Name, $Kind, ($Actual -join ','))
+
+    $match = $Actual.Count -eq $Expected.Count
+
+    if ($match) {
+        for ($index = 0; $index -lt $Actual.Count; $index++) {
+            if ($Actual[$index] -cne $Expected[$index]) {
+                $match = $false
+                break
+            }
+        }
+    }
+
+    if (-not $match) {
+        Stop-WithError ("{0} {1} mismatch. Expected: {2}; Actual: {3}." -f $Name, $Kind, ($Expected -join ','), ($Actual -join ','))
+    }
+}
+
 try {
     $sourcePath = (Resolve-Path -LiteralPath $Script -ErrorAction Stop).Path
     $sourceText = [System.IO.File]::ReadAllText($sourcePath)
@@ -126,36 +154,38 @@ catch {
 }
 
 $templates = Get-TargetTemplates -Text $sourceText
+$expectedOutbounds = @{
+    sb10 = @($ExpectSb10Outbounds)
+    sb11 = @($ExpectSb11Outbounds)
+}
+
 $expectedTypes = @{
     sb10 = @($ExpectSb10)
     sb11 = @($ExpectSb11)
 }
 
 foreach ($name in @('sb10', 'sb11')) {
-    $json = Convert-TemplateToJson -Name $name -Template $templates[$name]
+    $template = $templates[$name]
+
+    $forbidden = [regex]::Match([regex]::Unescape($template), '(?i)\b(?:wireguard|warp|wg-quick|cfwarp)\b|"endpoints"\s*:')
+    if ($forbidden.Success) {
+        Stop-WithError ("{0}.json template contains a forbidden wireguard/WARP marker: {1}" -f $name, $forbidden.Value)
+    }
+
+    $json = Convert-TemplateToJson -Name $name -Template $template
 
     if ($null -eq $json.PSObject.Properties['inbounds'] -or $null -eq $json.inbounds) {
         Stop-WithError "$name.json has no inbounds array."
     }
 
-    $actual = @($json.inbounds | ForEach-Object { [string]$_.type })
-    Write-Host ("{0} inbounds: {1}" -f $name, ($actual -join ','))
-
-    $expected = @($expectedTypes[$name])
-    $matches = $actual.Count -eq $expected.Count
-
-    if ($matches) {
-        for ($index = 0; $index -lt $actual.Count; $index++) {
-            if ($actual[$index] -cne $expected[$index]) {
-                $matches = $false
-                break
-            }
-        }
+    if ($null -eq $json.PSObject.Properties['outbounds'] -or $null -eq $json.outbounds) {
+        Stop-WithError "$name.json has no outbounds array."
     }
 
-    if (-not $matches) {
-        Stop-WithError ("{0} inbound mismatch. Expected: {1}; Actual: {2}." -f $name, ($expected -join ','), ($actual -join ','))
-    }
+    Assert-ExactTypes -Name $name -Kind 'inbound' -Expected @($expectedTypes[$name]) `
+        -Actual @($json.inbounds | ForEach-Object { [string]$_.type })
+    Assert-ExactTypes -Name $name -Kind 'outbound' -Expected @($expectedOutbounds[$name]) `
+        -Actual @($json.outbounds | ForEach-Object { [string]$_.type })
 }
 
 Write-Host 'OK'

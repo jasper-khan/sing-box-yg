@@ -8,7 +8,10 @@ param([string]$Path)
 if (-not $Path) { $Path = Join-Path $PSScriptRoot 'sb.sh' }
 
 $errors = @()
-$text   = Get-Content -Raw -LiteralPath $Path
+# sb.sh is UTF-8. Reading it with the Windows PowerShell 5.1 default (ANSI,
+# GB2312 on Chinese systems) would mojibake the text and let the checks below
+# pass against equally mojibake pattern literals.
+$text   = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
 $lines  = $text -split '\r?\n'
 
 # 1) Every ym_vl_re assignment must be foothill.edu
@@ -80,6 +83,12 @@ foreach ($name in 'sb10', 'sb11') {
   $types = [regex]::Matches($tmpl.Groups[1].Value, '"type"\s*:\s*"([a-z0-9]+)"') | ForEach-Object { $_.Groups[1].Value }
   $present = @($types | Where-Object { $_ -in @('vless', 'hysteria2') })
   if ($present.Count -lt 2) { $errors += "$name template lost vless/hysteria2 inbound" }
+  # WireGuard/WARP must not return to the shipped configs. Only the config
+  # templates are scanned, so unins cleanup of legacy warp-go/wg-quick
+  # leftovers (outside these heredocs) stays allowed.
+  $wgMarkers = [regex]::Matches([regex]::Unescape($tmpl.Groups[1].Value), '(?i)\b(?:wireguard|warp|wg-quick|cfwarp)\b|"endpoints"\s*:') |
+    ForEach-Object { $_.Value } | Sort-Object -Unique
+  if ($wgMarkers) { $errors += "$name template contains wireguard/WARP markers: $($wgMarkers -join ', ')" }
 }
 
 # 6) config files must be edited by JSON path (jq), never by fixed line numbers:
@@ -97,11 +106,39 @@ if ($clientGen.Count) {
 }
 
 # 8) firewall-disabling install flow must stay removed; print actual inbound ports instead.
-if ($text -match '\bopenyn\b|systemctl\s+stop\s+firewalld|ufw\s+disable') {
-  $errors += 'firewall-disabling install flow reappeared'
+#    Whole-firewall wipes only: targeted cleanup of one named chain such as
+#    "iptables -t nat -F PREROUTING" (used by unins) stays allowed.
+$fwHits = @()
+$fwPatterns = @(
+  @{ Label = 'openyn';                 Rx = '(?i)\bopenyn\b' },
+  @{ Label = 'setenforce 0';           Rx = '(?i)\bsetenforce\s+0\b' },
+  @{ Label = 'SELINUX=disabled';       Rx = '(?i)\bSELINUX\s*=\s*disabled\b' },
+  @{ Label = 'firewalld stop/disable'; Rx = '(?i)\bsystemctl\s+(?:stop|disable|mask)\s+firewalld\b|\b(?:service|rc-service)\s+firewalld\s+stop\b' },
+  @{ Label = 'ufw disable';            Rx = '(?i)\bufw\s+disable\b' },
+  @{ Label = 'iptables -P ACCEPT';     Rx = '\biptables\b[^\r\n]*\s(?:-P|--policy)\s+(?:INPUT|OUTPUT|FORWARD)\s+ACCEPT\b' },
+  @{ Label = 'apache/httpd stop';      Rx = '(?i)\bsystemctl\s+(?:stop|disable)\s+(?:apache2?|httpd)\b|\b(?:service|rc-service)\s+(?:apache2?|httpd)\s+stop\b|\bapachectl\s+stop\b' }
+)
+foreach ($fw in $fwPatterns) {
+  if ($text -match $fw.Rx) { $fwHits += $fw.Label }
 }
-if ($text -notmatch 'Vless-reality：TCP \$port_vl_re' -or
-    $text -notmatch 'Hysteria-2：UDP \$port_hy2') {
+foreach ($line in $lines) {
+  if ($line -notmatch '\biptables\b') { continue }
+  foreach ($segment in ($line -split '[|;&]+')) {
+    if ($segment -notmatch '\biptables\b') { continue }
+    foreach ($m in [regex]::Matches($segment, '(?<=\s)(?<flag>-F|--flush|-X|--delete-chain)(?![A-Za-z-])(?:\s+(?<chain>[A-Za-z][\w.-]*))?')) {
+      $chain = $m.Groups['chain'].Value
+      if ($chain -eq '' -or $chain -in @('INPUT', 'OUTPUT', 'FORWARD')) {
+        $fwHits += "iptables $($m.Groups['flag'].Value) $chain".Trim()
+      }
+    }
+  }
+}
+$fwHits = @($fwHits | Sort-Object -Unique)
+if ($fwHits.Count) {
+  $errors += "firewall-disabling install flow reappeared: $($fwHits -join ', ')"
+}
+if ($text -notmatch 'Vless-reality\uFF1ATCP \$port_vl_re' -or
+    $text -notmatch 'Hysteria-2\uFF1AUDP \$port_hy2') {
   $errors += 'install no longer prints the VLESS/Hysteria2 inbound port reminder'
 }
 if ($errors.Count) {

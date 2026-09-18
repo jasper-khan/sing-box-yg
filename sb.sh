@@ -154,7 +154,7 @@ inssb(){
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 green "使用哪个内核版本？"
 yellow "1：使用目前最新正式版内核 (回车默认)"
-yellow "2：使用之前1.10.7正式版内核 (支持geosite分流、IP优选级切换)"
+yellow "2：使用之前1.10.7正式版内核 (支持IPV4/IPV6代理优先级切换)"
 readp "请选择【1-2】：" menu
 if [ -z "$menu" ] || [ "$menu" = "1" ] ; then
 sbcore=$(curl -Ls https://github.com/SagerNet/sing-box/releases/latest | grep -oP 'tag/v\K[0-9.]+' | head -n 1)
@@ -567,7 +567,7 @@ vl_name=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_na
 public_key=$(cat /etc/s-box/public.key)
 short_id=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.reality.short_id[0]')
 hy2_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
-hy2_ports=$(iptables -t nat -nL --line 2>/dev/null | grep -w "$hy2_port" | awk '{print $8}' | sed 's/dpts://; s/dpt://' | tr '\n' ',' | sed 's/,$//')
+hy2_ports=$(for ipt in iptables ip6tables; do $ipt -t nat -nL SBHY2PORT --line 2>/dev/null | awk '/DNAT/{for(i=1;i<=NF;i++)if($i~/^dpts?:[0-9]/)print $i}'; done | sed 's/dpts://; s/dpt://' | awk '!a[$0]++' | tr '\n' ',' | sed 's/,$//')
 if [[ -n $hy2_ports ]]; then
 cmhy2pt=$(echo $hy2_ports | tr ':' '-')
 hyps="&mport=$cmhy2pt"
@@ -704,8 +704,23 @@ fi
 allports(){
 vl_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
 hy2_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
-hy2_ports=$(iptables -t nat -nL --line 2>/dev/null | grep -w "$hy2_port" | awk '{print $8}' | sed 's/dpts://; s/dpt://' | tr '\n' ',' | sed 's/,$//')
+hy2_ports=$(for ipt in iptables ip6tables; do $ipt -t nat -nL SBHY2PORT --line 2>/dev/null | awk '/DNAT/{for(i=1;i<=NF;i++)if($i~/^dpts?:[0-9]/)print $i}'; done | sed 's/dpts://; s/dpt://' | awk '!a[$0]++' | tr '\n' ',' | sed 's/,$//')
 [[ -n $hy2_ports ]] && hy2zfport="$hy2_ports" || hy2zfport="未添加"
+}
+
+sbportjump(){
+hy2p=$(sed 's://.*::g' /etc/s-box/sb.json 2>/dev/null | jq -r '.inbounds[1].listen_port' 2>/dev/null)
+if [[ -n $hy2p && $hy2p =~ ^[0-9]+$ ]]; then
+for ipt in iptables ip6tables; do
+while $ipt -t nat -nL PREROUTING --line 2>/dev/null | awk -v p=":$hy2p" '/DNAT/{for(i=1;i<=NF;i++)if(substr($i,length($i)-length(p)+1)==p && $1+0>0){print $1;exit}}' | grep -q .; do
+$ipt -t nat -D PREROUTING "$($ipt -t nat -nL PREROUTING --line 2>/dev/null | awk -v p=":$hy2p" '/DNAT/{for(i=1;i<=NF;i++)if(substr($i,length($i)-length(p)+1)==p && $1+0>0){print $1;exit}}')" 2>/dev/null || break
+done
+done
+fi
+iptables -t nat -N SBHY2PORT 2>/dev/null
+iptables -t nat -C PREROUTING -j SBHY2PORT 2>/dev/null || iptables -t nat -I PREROUTING -j SBHY2PORT
+ip6tables -t nat -N SBHY2PORT 2>/dev/null
+ip6tables -t nat -C PREROUTING -j SBHY2PORT 2>/dev/null || ip6tables -t nat -I PREROUTING -j SBHY2PORT
 }
 
 changeport(){
@@ -717,8 +732,9 @@ if [[ $rangeport =~ ^([1-9][0-9]{3,4}:[1-9][0-9]{3,4})$ ]]; then
 b=${rangeport%%:*}
 c=${rangeport##*:}
 if [[ $b -ge 1000 && $b -le 65535 && $c -ge 1000 && $c -le 65535 && $b -lt $c ]]; then
-iptables -t nat -A PREROUTING -p udp --dport $rangeport -j DNAT --to-destination :$port
-ip6tables -t nat -A PREROUTING -p udp --dport $rangeport -j DNAT --to-destination :$port
+sbportjump
+iptables -t nat -A SBHY2PORT -p udp --dport $rangeport -j DNAT --to-destination :$port
+ip6tables -t nat -A SBHY2PORT -p udp --dport $rangeport -j DNAT --to-destination :$port
 netfilter-persistent save >/dev/null 2>&1
 service iptables save >/dev/null 2>&1
 blue "已确认转发的端口范围：$rangeport"
@@ -732,9 +748,10 @@ echo
 }
 fport(){
 readp "\n请输入一个转发的端口 (1000-65535范围内)：" onlyport
-if [[ $onlyport -ge 1000 && $onlyport -le 65535 ]]; then
-iptables -t nat -A PREROUTING -p udp --dport $onlyport -j DNAT --to-destination :$port
-ip6tables -t nat -A PREROUTING -p udp --dport $onlyport -j DNAT --to-destination :$port
+if [[ $onlyport =~ ^[0-9]+$ && $onlyport -ge 1000 && $onlyport -le 65535 ]]; then
+sbportjump
+iptables -t nat -A SBHY2PORT -p udp --dport $onlyport -j DNAT --to-destination :$port
+ip6tables -t nat -A SBHY2PORT -p udp --dport $onlyport -j DNAT --to-destination :$port
 netfilter-persistent save >/dev/null 2>&1
 service iptables save >/dev/null 2>&1
 blue "已确认转发的端口：$onlyport"
@@ -749,8 +766,8 @@ allports
 hy2_ports=$(echo "$hy2_ports" | sed 's/,/,/g')
 IFS=',' read -ra ports <<< "$hy2_ports"
 for port in "${ports[@]}"; do
-iptables -t nat -D PREROUTING -p udp --dport $port -j DNAT --to-destination :$hy2_port
-ip6tables -t nat -D PREROUTING -p udp --dport $port -j DNAT --to-destination :$hy2_port
+iptables -t nat -D SBHY2PORT -p udp --dport $port -j DNAT --to-destination :$hy2_port
+ip6tables -t nat -D SBHY2PORT -p udp --dport $port -j DNAT --to-destination :$hy2_port
 done
 netfilter-persistent save >/dev/null 2>&1
 service iptables save >/dev/null 2>&1
@@ -958,8 +975,12 @@ subtoken="$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].users[0].uu
 else
 subtoken="$menu"
 fi
-rm -rf /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"
-echo $subtoken > /etc/s-box/subtoken.log
+if [[ ! $subtoken =~ ^[A-Za-z0-9._-]+$ || $subtoken == *..* ]]; then
+red "订阅链接路径密码只能使用字母、数字、点、下划线和减号，且不能包含 .." && return 1
+fi
+oldsubtoken=$(cat /etc/s-box/subtoken.log 2>/dev/null)
+[[ $oldsubtoken =~ ^[A-Za-z0-9._-]+$ && $oldsubtoken != *..* ]] && rm -rf /root/websbox/"$oldsubtoken"
+printf '%s\n' "$subtoken" > /etc/s-box/subtoken.log
 green "订阅链接路径密码：$(cat /etc/s-box/subtoken.log 2>/dev/null)"
 }
 subportipsub(){
@@ -981,9 +1002,9 @@ yellow "4：卸载本地IP订阅链接"
 yellow "0：返回上层"
 readp "请选择【0-4】：" menu
 if [ "$menu" = "1" ]; then
-subtokenipsub && subportipsub
+subtokenipsub && subportipsub || { sleep 2; ipsub; }
 elif [ "$menu" = "2" ];then
-subtokenipsub
+subtokenipsub || { sleep 2; ipsub; }
 elif [ "$menu" = "3" ];then
 subportipsub
 elif [ "$menu" = "4" ];then
@@ -1001,9 +1022,13 @@ fi
 echo
 green "请稍后…………"
 kill -15 $(pgrep -f 'websbox' 2>/dev/null) >/dev/null 2>&1
-mkdir -p /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"
-rm -f /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"/clmi.yaml /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"/sbox.json
-ln -sf /etc/s-box/jhsub.txt /root/websbox/"$(cat /etc/s-box/subtoken.log 2>/dev/null)"/jhsub.txt
+subtoken=$(cat /etc/s-box/subtoken.log 2>/dev/null)
+if [[ ! $subtoken =~ ^[A-Za-z0-9._-]+$ || $subtoken == *..* ]]; then
+red "订阅链接路径密码无效，请重新设置后再试" && sleep 3 && exit
+fi
+mkdir -p /root/websbox/"$subtoken"
+rm -f /root/websbox/"$subtoken"/clmi.yaml /root/websbox/"$subtoken"/sbox.json
+ln -sf /etc/s-box/jhsub.txt /root/websbox/"$subtoken"/jhsub.txt
 if command -v apk >/dev/null 2>&1; then
 busybox-extras httpd -f -p "$(cat /etc/s-box/subport.log 2>/dev/null)" -h /root/websbox > /dev/null 2>&1 &
 else
@@ -1167,18 +1192,26 @@ rm /tmp/crontab.tmp
 }
 
 lnsb(){
-rm -rf /usr/bin/sb
-curl -L -o /usr/bin/sb -# --retry 2 --insecure https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/sb.sh
-chmod +x /usr/bin/sb
+tmpsb=$(mktemp /usr/bin/sb.new.XXXXXX) || { red "创建临时文件失败"; return 1; }
+if curl -L --fail --proto '=https' --retry 2 -# -o "$tmpsb" https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/sb.sh && bash -n "$tmpsb"; then
+chmod +x "$tmpsb"
+mv -f "$tmpsb" /usr/bin/sb
+else
+rm -f "$tmpsb"
+red "下载脚本失败或语法校验不通过，已保留原有脚本" && return 1
+fi
 }
 
 upsbyg(){
 if [[ ! -f '/usr/bin/sb' ]]; then
 red "未正常安装Sing-box-yg" && exit
 fi
-lnsb
+if lnsb; then
 curl -sL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1 > /etc/s-box/v
 green "Sing-box-yg安装脚本升级成功" && sleep 5 && sb
+else
+red "更新失败，已保留原有脚本" && sleep 3 && sb
+fi
 }
 
 lapre(){
@@ -1210,7 +1243,7 @@ upcore=$(curl -Ls https://github.com/SagerNet/sing-box/releases | grep -oP '/tag
 elif [ "$menu" = "3" ]; then
 echo
 red "注意: 版本号在 https://github.com/SagerNet/sing-box/tags 可查，且有Downloads字样 (必须1.10系或者1.30系以上版本)"
-green "正式版版本号格式：数字.数字.数字 (例：1.10.7   注意，1.10系列内核支持geosite分流，1.10以上内核不支持geosite分流"
+green "正式版版本号格式：数字.数字.数字 (例：1.10.7   注意，1.10系列内核与1.10以上内核的分流配置格式不同"
 green "测试版版本号格式：数字.数字.数字-alpha或rc或beta.数字 (例：1.13.0-alpha或rc或beta.1)"
 readp "请输入Sing-box版本号：" upcore
 else
@@ -1219,14 +1252,12 @@ fi
 if [[ -n $upcore ]]; then
 green "开始下载并更新Sing-box内核……请稍等"
 sbname="sing-box-$upcore-linux-$cpu"
-curl -L -o /etc/s-box/sing-box.tar.gz  -# --retry 2 https://github.com/SagerNet/sing-box/releases/download/v$upcore/$sbname.tar.gz
-if [[ -f '/etc/s-box/sing-box.tar.gz' ]]; then
-tar xzf /etc/s-box/sing-box.tar.gz -C /etc/s-box
-mv /etc/s-box/$sbname/sing-box /etc/s-box
-rm -rf /etc/s-box/{sing-box.tar.gz,$sbname}
-if [[ -f '/etc/s-box/sing-box' ]]; then
-chown root:root /etc/s-box/sing-box
-chmod +x /etc/s-box/sing-box
+rm -rf /etc/s-box/sing-box.tar.gz /etc/s-box/$sbname
+if curl -L --fail -o /etc/s-box/sing-box.tar.gz -# --retry 2 https://github.com/SagerNet/sing-box/releases/download/v$upcore/$sbname.tar.gz && tar xzf /etc/s-box/sing-box.tar.gz -C /etc/s-box && chmod +x /etc/s-box/$sbname/sing-box 2>/dev/null && [[ $(/etc/s-box/$sbname/sing-box version 2>/dev/null | awk '/version/{print $NF}') == "$upcore" ]]; then
+chown root:root /etc/s-box/$sbname/sing-box
+chmod +x /etc/s-box/$sbname/sing-box
+mv -f /etc/s-box/$sbname/sing-box /etc/s-box/sing-box
+rm -rf /etc/s-box/sing-box.tar.gz /etc/s-box/$sbname
 sbnh=$(/etc/s-box/sing-box version 2>/dev/null | awk '/version/{print $NF}' 2>/dev/null | cut -d '.' -f 1,2)
 [[ "$sbnh" == "1.10" ]] && num=10 || num=11
 rm -rf /etc/s-box/sb.json
@@ -1234,10 +1265,8 @@ cp /etc/s-box/sb${num}.json /etc/s-box/sb.json
 restartsb && sbshare > /dev/null 2>&1
 blue "成功升级/切换 Sing-box 内核版本：$(/etc/s-box/sing-box version | awk '/version/{print $NF}')" && sleep 3 && sb
 else
-red "下载 Sing-box 内核不完整，安装失败，请重试" && upsbcroe
-fi
-else
-red "下载 Sing-box 内核失败或不存在，请重试" && upsbcroe
+rm -rf /etc/s-box/sing-box.tar.gz /etc/s-box/$sbname
+red "下载、解包或校验 Sing-box 内核失败，已保留原内核，请重试" && upsbcroe
 fi
 else
 red "版本号检测出错，请重试" && upsbcroe
@@ -1252,7 +1281,7 @@ rc-update del "$svc" default >/dev/null 2>&1
 done
 rm -rf /etc/init.d/{sing-box,argo}
 else
-for svc in sing-box argo; do
+for svc in sing-box argo wg-quick@wgcf warp-go; do
 systemctl stop "$svc" >/dev/null 2>&1
 systemctl disable "$svc" >/dev/null 2>&1
 done
@@ -1260,11 +1289,16 @@ rm -rf /etc/systemd/system/{sing-box.service,argo.service}
 fi
 ps -ef | grep '[c]loudflared' | awk '{print $2}' | xargs kill 2>/dev/null
 ps -ef | grep '[s]bwpph' | awk '{print $2}' | xargs kill 2>/dev/null
+ps -ef | grep '[w]arp-go' | awk '{print $2}' | xargs kill 2>/dev/null
 kill -15 $(pgrep -f 'websbox' 2>/dev/null) >/dev/null 2>&1
 rm -rf /etc/s-box sbyg_update /usr/bin/sb /root/geoip.db /root/geosite.db /root/warpapi /root/warpip /root/websbox
 rm -f /etc/local.d/alpineargo.start /etc/local.d/alpinesub.start /etc/local.d/alpinews5.start
 uncronsb
-iptables -t nat -F PREROUTING >/dev/null 2>&1
+for ipt in iptables ip6tables; do
+$ipt -t nat -D PREROUTING -j SBHY2PORT >/dev/null 2>&1
+$ipt -t nat -F SBHY2PORT >/dev/null 2>&1
+$ipt -t nat -X SBHY2PORT >/dev/null 2>&1
+done
 netfilter-persistent save >/dev/null 2>&1
 service iptables save >/dev/null 2>&1
 green "Sing-box卸载完成！"

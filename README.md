@@ -1,18 +1,18 @@
-### 一、Sing-box-yg精装桶一键五协议共存脚本（VPS专用）
-### 二、Serv00/Hostuno-sb-yg多平台一键三协议共存脚本（Serv00/Hostuno专用）
+### 本 fork：Sing-box-yg 一键双协议共存脚本（VPS 专用，仅 vless-reality + hysteria2）
+> 边界：本 fork 只维护 VPS 版 `sb.sh`（vless-reality + hysteria2 两个协议）。Serv00/Hostuno 及相关文件（如 `serv00.sh`）按上游原样保留，不属于本 fork 的维护范围。
 
 ### 注：本项目分享订阅节点都为本地化生成，不使用节点转换、订阅器等第三方外链引用，无需担心节点订阅被外链作者查看
 
 ### 交流平台：[甬哥博客地址](https://ygkkk.blogspot.com)、[甬哥YouTube频道](https://www.youtube.com/@ygkkk)、[甬哥TG电报群组](https://t.me/+jZHc6-A-1QQ5ZGVl)、[甬哥TG电报频道](https://t.me/+DkC9ZZUgEFQzMTZl)
 
 ----------------------------------------------------------------
-#### 推荐推广：极简 + 轻量 + 快速的多协议的ArgoSBX脚本，请移步到[ArgoSBX脚本项目](https://github.com/yonggekkk/argosbx)
+#### 本 fork 与上游多协议版本（含 Argo）相互独立：本 README 只提供 VPS `sb.sh`（vless-reality + hysteria2）的安装与说明。
 
 --------------------------------------------------------------
 
-### 一、Sing-box-yg精装桶小白专享一键五协议共存脚本（VPS专用）
+### 一、Sing-box-yg小白专享一键双协议共存脚本（VPS专用，本 fork 维护）
 
-* 支持人气最高的五大协议：Vless-reality-vision、Vmess-ws(tls)/Argo、Hysteria-2、Tuic-v5、Anytls
+* 支持两个协议：Vless-reality-vision、Hysteria-2（Vmess-ws(tls)/Argo、Tuic-v5、Anytls 已删除）
 
 * 支持纯IPV6、纯IPV4、双栈VPS，支持amd与arm架构，支持alpine系统，推荐使用最新的Ubuntu系统
 
@@ -28,6 +28,8 @@
 [🥇搭建代理9大问题排行榜：第4名全网99%的人被误导！第1名每个人都被折腾到爆！](https://youtu.be/pJwJBqBkcfw)
 
 [🥇2025年度代理协议"拉到夯"综合排名](https://youtu.be/IoFtykGXDao)
+
+* 以下视频清单属于上游多协议教程（Argo/WARP/AnyTLS/vmess 等），本 fork 仅支持 vless-reality 与 hysteria2，视频中的部分功能在本 fork 不可用。
 
 [Sing-box精装桶小白一键脚本（一）：配置文件通吃SFA/SFI/SFW三平台客户端，Argo隧道、双证书切换、域名分流](https://youtu.be/QwTapeVPeB0)
 
@@ -53,12 +55,12 @@
 * 脚本自更新、版本检查与上面的安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
 * 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认伪装域名、服务端模板结构、自更新 URL、协议范围、以及"不再按行号改配置 / 不再生成客户端配置"这些不变量都还在。
 * 服务端配置另可用 `tools/render-configs.ps1` 渲染校验（预期两个模板都只输出 `vless,hysteria2`）。
-* 从旧的多协议版本升级：必须**先卸载再重装**（菜单 2 再 1）。只点菜单 7"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`，旧配置里残留的其它协议 inbound 不会被清理；卸载流程保留了旧版 Argo/WARP/WARP-plus 服务、进程与定时任务的清理。
+* 从旧的多协议版本升级：必须**先卸载再重装**。菜单 2 卸载后会删除 `/usr/bin/sb`，请重新执行上面的安装命令并选菜单 1。只点菜单 6"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`；旧配置里残留的其它协议 inbound 不会被清理；卸载流程保留了旧版 Argo/WARP/WARP-plus 服务、进程与定时任务的清理。
 
 ### 同步上游更新
 
 1. `git fetch upstream`
-2. `git merge -X ours upstream/main`：这条命令自动执行本 fork 的取舍规则——冲突处一律保留本 fork 版本（被删协议/Argo/WARP/分流的删除、`foothill.edu` 默认值、指向本 fork 的自更新 URL），未冲突的上游改动照常合并（vless-reality 与 hysteria2 的字段改动通常属于这一类，会自动进来）。
+2. `git merge upstream/main`：不要使用 `-X ours`。冲突时手工解决，明确保留本 fork 的删除边界（vmess/Argo、tuic、anytls、WARP、域名分流相关功能不得重新引入，删除处保持删除）；接受 vless-reality、hysteria2 路径上的上游改动，并保留 `foothill.edu` 默认值与指向本 fork 的自更新 URL。
 3. 合并后依次运行：`bash -n sb.sh`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/render-configs.ps1`。
 4. 服务端配置的读写已全部改为按 jq 字段路径（`.inbounds[0]` = vless-reality、`.inbounds[1]` = hysteria2），上游增删字段不再影响这些功能；脚本中已不存在按行号改写配置的 sed，`fork-check.ps1` 会守住这一点。
 
@@ -70,13 +72,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/
 bash <(curl -Ls https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/sb.sh)
 ```
 
-一键快捷命令现实本地IP订阅：```printf '3\n8\n1\n订阅密码' | sb```
-
-一键快捷命令现实Argo临时隧道：```printf '3\n3\n1\n1' | sb```
-
-一键快捷命令现实Argo固定隧道：```printf '3\n3\n2\n1\n固定密钥\n固定域名' | sb```
-
-一键快捷命令现实域名分流：```printf '5\n2\n1\n后缀域名1 后缀域名2' | sb```
+一键快捷命令实现本地IP订阅：```printf '3\n6\n1\n订阅密码' | sb```
 
 
 ### Sing-box-yg脚本界面预览图（注：相关参数随意填写，仅供围观）
@@ -85,7 +81,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/s
 
 -----------------------------------------------------
 
-### 二、Serv00/Hostuno一键三协议共存脚本（Serv00/Hostuno专用）：
+### 二、Serv00/Hostuno（上游原样保留，不属于本 fork 维护范围）：
 
 * 目前免费Serv00使用代理脚本有被封账号的风险，收费版Hostuno不受影响，可正常使用
 
@@ -111,13 +107,10 @@ bash <(curl -Ls https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/s
 
 [Serv00免费代理脚本最终教程（五）：Github、VPS、软路由多平台脚本大更新！支持多功能网页，Cron内射保活+网页外射保活，任你选](https://youtu.be/tKaBdbU4G4s)
 
-### Serv00/Hostuno-sb-yg一键脚本 
+### 关于 Serv00/Hostuno
 
-* Argo高度自定义：可以重置临时隧道; 可以继续使用上回的固定隧道; 也可以更换固定隧道的域名或token
-
-```
-bash <(curl -Ls https://raw.githubusercontent.com/yonggekkk/sing-box-yg/main/serv00.sh)
-```
+* 本 fork 不维护 Serv00/Hostuno，也不提供安装入口；`serv00.sh` 等文件按上游原样保留、未做双协议改造。
+* 如需 Serv00/Hostuno 脚本，请前往上游仓库 `yonggekkk/sing-box-yg` 自行了解，但上游脚本不属于本 fork 的 vless-reality + hysteria2 范围。
 
 #### Serv00/Hostuno-sb-yg脚本界面预览图，仅限方案一的SSH端安装脚本（注：仅供围观）
 ![a6b776a094566ab14e88fdcd70ba9e9](https://github.com/user-attachments/assets/90a918ed-aec7-4a1f-8159-97f3acfd0092)
