@@ -81,16 +81,20 @@ foreach ($name in 'sb10', 'sb11') {
   if ($present.Count -lt 2) { $errors += "$name template lost vless/hysteria2 inbound" }
 }
 
-# 6) fixed line numbers the vless/hy2 flows write to must still hold the same keys
-$critical = @{ 14 = 'listen_port'; 23 = 'server_name'; 27 = 'server'; 41 = 'listen_port'; 53 = 'certificate_path'; 54 = 'key_path' }
-foreach ($name in 'sb10', 'sb11') {
+# 6) fixed line numbers the remaining flows write to must still hold the same keys
+#    (62 = domain_strategy is sb10-only: it belongs to the direct outbound)
+$critical = @{
+  sb10 = @{ 14 = 'listen_port'; 23 = 'server_name'; 27 = 'server'; 41 = 'listen_port'; 53 = 'certificate_path'; 54 = 'key_path'; 62 = 'domain_strategy' }
+  sb11 = @{ 14 = 'listen_port'; 23 = 'server_name'; 27 = 'server'; 41 = 'listen_port'; 53 = 'certificate_path'; 54 = 'key_path' }
+}
+foreach ($name in $critical.Keys) {
   $tmpl = [regex]::Match($text, "(?ms)^cat > /etc/s-box/$name\.json <<EOF\r?\n(.*?)^EOF\r?$")
   if (-not $tmpl.Success) { continue }
   $body = $tmpl.Groups[1].Value -split '\r?\n'
-  foreach ($ln in $critical.Keys) {
+  foreach ($ln in $critical[$name].Keys) {
     $line = $body[$ln - 1]
-    if (-not $line -or $line -notmatch ('"' + [regex]::Escape($critical[$ln]) + '"\s*:')) {
-      $errors += "$name line $ln no longer holds $($critical[$ln])"
+    if (-not $line -or $line -notmatch ('"' + [regex]::Escape($critical[$name][$ln]) + '"\s*:')) {
+      $errors += "$name line $ln no longer holds $($critical[$name][$ln])"
     }
   }
 }
