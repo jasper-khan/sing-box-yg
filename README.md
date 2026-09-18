@@ -52,7 +52,13 @@
 * 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认值、服务端模板的 23/27 行对齐、自更新 URL、以及"只保留两个协议"四项不变量都还在。
 * 服务端配置另可用 `tools/render-configs.ps1` 渲染校验（预期两个模板都只输出 `vless,hysteria2`）。
 * 从旧的多协议版本升级：必须**先卸载再重装**（菜单 2 再 1）。只点菜单 7"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`，新脚本的固定行号会作用在旧的五协议配置上而写错字段；卸载流程保留了旧版 Argo 服务与 cloudflared 定时任务的清理。
-* 注意：本 fork 与上游在这些区域差异很大，合并上游时冲突会集中在被删除的协议代码附近；固定行号 sed 的行号依赖 sb10/sb11 模板的行数，上游若改动模板需用 `python`/`node` 重新核对（当前 sb10 = 192 行、sb11 = 140 行）。
+
+### 同步上游更新
+
+1. `git fetch upstream && git merge upstream/main`
+2. 冲突处理原则：被删掉的协议 / Argo / WARP / 分流的代码**保持删除**；vless-reality 与 hysteria2 的改动**接受上游**。
+3. 合并后依次运行：`bash -n sb.sh`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/render-configs.ps1`。
+4. 服务端配置的读写已全部改为按 jq 字段路径（`.inbounds[0]` = vless-reality、`.inbounds[1]` = hysteria2），上游增删字段不再影响这些功能；脚本中已不存在按行号改写配置的 sed，`fork-check.ps1` 会守住这一点。
 
 ```
 bash <(wget -qO- https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/sb.sh)

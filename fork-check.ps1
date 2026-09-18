@@ -48,10 +48,11 @@ if ($blocks.Count -ne 2) {
   }
 }
 
-# 3) changeym still writes the domain back via the 23/27 sed calls
-if (-not $text.Contains('echo $sbfiles | xargs -n1 sed -i "23s/$a/$ym_vl_re/"') -or
-    -not $text.Contains('echo $sbfiles | xargs -n1 sed -i "27s/$b/$ym_vl_re/"')) {
-  $errors += 'changeym 23/27 write-back changed, needs manual review'
+# 3) changeym must keep writing the reality domain by JSON path (no line numbers)
+if ($text -notmatch 'jq --arg v "\$ym_vl_re"' -or
+    $text -notmatch '\(\.inbounds\[0\]\.tls\.server_name\) = \$v' -or
+    $text -notmatch '\(\.inbounds\[0\]\.tls\.reality\.handshake\.server\) = \$v') {
+  $errors += 'changeym reality-domain write-back is missing or no longer path-based'
 }
 
 # 4) self-update and version check must point at this fork
@@ -81,22 +82,11 @@ foreach ($name in 'sb10', 'sb11') {
   if ($present.Count -lt 2) { $errors += "$name template lost vless/hysteria2 inbound" }
 }
 
-# 6) fixed line numbers the remaining flows write to must still hold the same keys
-#    (62 = domain_strategy is sb10-only: it belongs to the direct outbound)
-$critical = @{
-  sb10 = @{ 14 = 'listen_port'; 23 = 'server_name'; 27 = 'server'; 41 = 'listen_port'; 53 = 'certificate_path'; 54 = 'key_path'; 62 = 'domain_strategy' }
-  sb11 = @{ 14 = 'listen_port'; 23 = 'server_name'; 27 = 'server'; 41 = 'listen_port'; 53 = 'certificate_path'; 54 = 'key_path' }
-}
-foreach ($name in $critical.Keys) {
-  $tmpl = [regex]::Match($text, "(?ms)^cat > /etc/s-box/$name\.json <<EOF\r?\n(.*?)^EOF\r?$")
-  if (-not $tmpl.Success) { continue }
-  $body = $tmpl.Groups[1].Value -split '\r?\n'
-  foreach ($ln in $critical[$name].Keys) {
-    $line = $body[$ln - 1]
-    if (-not $line -or $line -notmatch ('"' + [regex]::Escape($critical[$name][$ln]) + '"\s*:')) {
-      $errors += "$name line $ln no longer holds $($critical[$name][$ln])"
-    }
-  }
+# 6) config files must be edited by JSON path (jq), never by fixed line numbers:
+#    line numbers drift whenever upstream adds or removes a field.
+$lineSeds = [regex]::Matches($text, 'sed\s+-i\s+"\d+s')
+if ($lineSeds.Count) {
+  $errors += "fixed-line sed edits are back ($($lineSeds.Count)); they break silently on upstream field changes"
 }
 
 if ($errors.Count) {

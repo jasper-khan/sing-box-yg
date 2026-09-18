@@ -1064,11 +1064,9 @@ readp "请选择：" menu
 if [ "$menu" = "1" ]; then
 readp "请输入vless-reality域名 (回车使用foothill.edu)：" menu
 ym_vl_re=${menu:-foothill.edu}
-a=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')
-b=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.reality.handshake.server')
-c=$(cat /etc/s-box/vl_reality.txt | cut -d'=' -f5 | cut -d'&' -f1)
-echo $sbfiles | xargs -n1 sed -i "23s/$a/$ym_vl_re/"
-echo $sbfiles | xargs -n1 sed -i "27s/$b/$ym_vl_re/"
+for f in $sbfiles; do
+jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 restartsb && sbshare > /dev/null 2>&1
 blue "Vless-reality域名证书更换完毕"
 elif [ "$menu" = "2" ]; then
@@ -1082,8 +1080,9 @@ else
 c_c='/etc/s-box/cert.pem'
 d_d='/etc/s-box/private.key'
 fi
-echo $sbfiles | xargs -n1 sed -i "53s#$c#$c_c#"
-echo $sbfiles | xargs -n1 sed -i "54s#$d#$d_d#"
+for f in $sbfiles; do
+jq --arg c "$c_c" --arg k "$d_d" '(.inbounds[1].tls.certificate_path) = $c | (.inbounds[1].tls.key_path) = $k' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 restartsb && sbshare > /dev/null 2>&1
 blue "Hysteria2协议域名证书更换完毕"
 else
@@ -1159,7 +1158,9 @@ green "0：返回上层"
 readp "请选择要变更端口的协议：" menu
 if [ "$menu" = "1" ]; then
 vlport
-echo $sbfiles | xargs -n1 sed -i "14s/$vl_port/$port_vl_re/"
+for f in $sbfiles; do
+jq --argjson p "$port_vl_re" '(.inbounds[0].listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 restartsb && sbshare > /dev/null 2>&1
 blue "Vless-reality端口更改完成"
 echo
@@ -1173,11 +1174,15 @@ if [ "$menu" = "1" ]; then
 if [ -n "$hy2_ports" ]; then
 hy2deports
 hy2port
-echo $sbfiles | xargs -n1 sed -i "41s/$hy2_port/$port_hy2/"
+for f in $sbfiles; do
+jq --argjson p "$port_hy2" '(.inbounds[1].listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 restartsb && sbshare > /dev/null 2>&1
 else
 hy2port
-echo $sbfiles | xargs -n1 sed -i "41s/$hy2_port/$port_hy2/"
+for f in $sbfiles; do
+jq --argjson p "$port_hy2" '(.inbounds[1].listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 restartsb && sbshare > /dev/null 2>&1
 fi
 blue "Hysteria2端口更改完成"
@@ -1236,7 +1241,7 @@ if [[ "$sbnh" == "1.10" ]]; then
 v4v6
 chip(){
 rpip=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.outbounds[0].domain_strategy')
-sed -i "62s/$rpip/$rrpip/g" /etc/s-box/sb10.json
+jq --arg v "$rrpip" '(.outbounds[0].domain_strategy) = $v' /etc/s-box/sb10.json > /etc/s-box/sb10.json.tmp && mv /etc/s-box/sb10.json.tmp /etc/s-box/sb10.json
 cp /etc/s-box/sb10.json /etc/s-box/sb.json
 restartsb
 }
