@@ -1611,6 +1611,7 @@ rm /tmp/crontab.tmp
 uncronsb(){
 crontab -l 2>/dev/null > /tmp/crontab.tmp
 sed -i '/sing-box/d' /tmp/crontab.tmp
+sed -i '/sbwpph/d' /tmp/crontab.tmp
 sed -i '/websbox/d' /tmp/crontab.tmp
 sed -i '/cloudflared/d' /tmp/crontab.tmp
 crontab /tmp/crontab.tmp >/dev/null 2>&1
@@ -1710,9 +1711,10 @@ done
 rm -rf /etc/systemd/system/{sing-box.service,argo.service}
 fi
 ps -ef | grep '[c]loudflared' | awk '{print $2}' | xargs kill 2>/dev/null
+ps -ef | grep '[s]bwpph' | awk '{print $2}' | xargs kill 2>/dev/null
 kill -15 $(pgrep -f 'websbox' 2>/dev/null) >/dev/null 2>&1
-rm -rf /etc/s-box sbyg_update /usr/bin/sb /root/geoip.db /root/geosite.db /root/websbox
-rm -f /etc/local.d/alpineargo.start /etc/local.d/alpinesub.start
+rm -rf /etc/s-box sbyg_update /usr/bin/sb /root/geoip.db /root/geosite.db /root/warpapi /root/warpip /root/websbox
+rm -f /etc/local.d/alpineargo.start /etc/local.d/alpinesub.start /etc/local.d/alpinews5.start
 uncronsb
 iptables -t nat -F PREROUTING >/dev/null 2>&1
 netfilter-persistent save >/dev/null 2>&1
