@@ -564,7 +564,8 @@ hy2_certpath=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.cert
 hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
 hy2_name=$(openssl x509 -in "$hy2_certpath" -noout -text 2>/dev/null | grep -oE 'DNS:[^, ]+' | head -n 1 | sed 's/DNS://')
 hy2_name=${hy2_name:-$(openssl x509 -in "$hy2_certpath" -noout -subject 2>/dev/null | sed 's/.*CN *= *//')}
-if [[ "$hy2_sniname" = */etc/s-box/private.key ]]; then
+SHA256=
+if [[ "$hy2_certpath" = '/etc/s-box/cert.pem' && "$hy2_sniname" = '/etc/s-box/private.key' ]]; then
 SHA256=$(openssl x509 -in "$hy2_certpath" -outform DER 2>/dev/null | sha256sum | awk '{print $1}')
 echo "$SHA256" > /etc/s-box/SHA256.txt
 SHA256=$(cat /etc/s-box/SHA256.txt)
@@ -636,7 +637,7 @@ echo
 ipuuid
 sbshare
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-blue "可选择8，刷新并显示分享链接与聚合订阅"
+blue "可选择8，刷新并显示分享链接"
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 echo
 }
@@ -654,6 +655,7 @@ certc_new=${certc_new:-$certc_now}
 certp_new=${certp_new:-$certp_now}
 if [[ ! -f $certc_new || ! -f $certp_new ]]; then
 red "证书或私钥文件不存在，未做修改" && sleep 3 && sb
+return
 fi
 for f in $sbfiles; do
 jq --arg c "$certc_new" --arg k "$certp_new" '(.inbounds[1].tls.certificate_path) = $c | (.inbounds[1].tls.key_path) = $k' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
@@ -851,12 +853,16 @@ if [ "$menu" = "1" ]; then
 readp "输入uuid，必须是uuid格式，不懂就回车(重置并随机生成uuid)：" menu
 if [ -z "$menu" ]; then
 uuid=$(/etc/s-box/sing-box generate uuid)
-else
+elif [[ "$menu" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
 uuid=$menu
+else
+red "uuid 格式不正确，未做修改" && sleep 3 && return
 fi
-echo $sbfiles | xargs -n1 sed -i "s/$olduuid/$uuid/g"
+for f in $sbfiles; do
+jq --arg u "$uuid" '(.inbounds[0].users[0].uuid) = $u' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 restartsb && sbshare > /dev/null 2>&1
-blue "已确认uuid (密码)：${uuid}" 
+blue "已确认uuid (密码)：${uuid}"
 else
 changeserv
 fi
@@ -1123,8 +1129,9 @@ fi
 
 showprotocol(){
 allports
+hy2_certpath=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path')
 hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path')
-[[ "$hy2_sniname" = '/etc/s-box/private.key' ]] && hy2_zs="自签证书" || hy2_zs="域名证书"
+[[ "$hy2_certpath" = '/etc/s-box/cert.pem' && "$hy2_sniname" = '/etc/s-box/private.key' ]] && hy2_zs="自签证书" || hy2_zs="域名证书"
 echo -e "Sing-box节点关键信息如下："
 echo -e "🚀【 Vless-reality 】${yellow}端口:$vl_port  Reality域名证书伪装地址：$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')${plain}"
 echo -e "🚀【  Hysteria-2   】${yellow}端口:$hy2_port  证书形式:$hy2_zs  转发多端口: $hy2zfport${plain}"
@@ -1162,13 +1169,13 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 green " 1. 一键安装 Sing-box" 
 green " 2. 删除卸载 Sing-box"
 white "----------------------------------------------------------------------------------"
-green " 3. 变更配置 【证书/名称/域名/UUID/IP优先/订阅】"
+green " 3. 变更配置 【证书/名称/域名/UUID/IP优先】"
 green " 4. 更改主端口/添加多端口跳跃复用" 
 green " 5. 关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"
 green " 7. 更新/切换/指定 Sing-box 内核版本"
 white "----------------------------------------------------------------------------------"
-green " 8. 刷新并查看节点 【分享链接/聚合订阅/本地IP订阅】"
+green " 8. 刷新并查看节点 【分享链接】"
 green " 9. 查看 Sing-box 运行日志"
 green "10. 一键原版BBR+FQ加速"
 green "11. 填写Hysteria2证书路径"
