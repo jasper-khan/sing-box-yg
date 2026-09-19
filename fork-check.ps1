@@ -101,11 +101,11 @@ foreach ($name in 'sb10', 'sb11') {
   $types = [regex]::Matches($tmpl.Groups[1].Value, '"type"\s*:\s*"([a-z0-9]+)"') | ForEach-Object { $_.Groups[1].Value }
   $present = @($types | Where-Object { $_ -in @('vless', 'hysteria2') })
   if ($present.Count -lt 2) { $errors += "$name template lost vless/hysteria2 inbound" }
-  # WireGuard/WARP must not return to the shipped configs (only the config
-  # templates are scanned here; legacy-cleanup references are covered by 5b).
-  $wgMarkers = [regex]::Matches([regex]::Unescape($tmpl.Groups[1].Value), '(?i)\b(?:wireguard|warp|wg-quick|cfwarp)\b|"endpoints"\s*:') |
+  # WARP-WireGuard is intentionally back in fork.11 (see guard 18); only the
+  # dropped WARP-Socks5 / WARP-plus helpers must stay out of the configs.
+  $wgMarkers = [regex]::Matches([regex]::Unescape($tmpl.Groups[1].Value), '(?i)\b(?:warp-plus|sbwpph|socks-out|warp-socks5|psiphon|cfwarp|cloudflared)\b') |
     ForEach-Object { $_.Value } | Sort-Object -Unique
-  if ($wgMarkers) { $errors += "$name template contains wireguard/WARP markers: $($wgMarkers -join ', ')" }
+  if ($wgMarkers) { $errors += "$name template contains dropped WARP-Socks5 markers: $($wgMarkers -join ', ')" }
 }
 
 # 5b) uninstall must only clean this fork's own components; legacy argo/warp/
@@ -180,12 +180,12 @@ $cs = [regex]::Match($text, '(?ms)^changeserv\(\)\{.*?^\}')
 if (-not $cs.Success) {
   $errors += 'changeserv menu not found'
 } else {
-  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changeip') {
+  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changeip', 'changefl') {
     if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
   }
   $csOpts = [regex]::Matches($cs.Value, '"\$menu"\s*=\s*"([0-9]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
-  if (($csOpts -join ',') -ne '1,2,3,4,5') {
-    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5)"
+  if (($csOpts -join ',') -ne '1,2,3,4,5,6') {
+    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5,6)"
   }
 }
 
@@ -246,6 +246,58 @@ if (-not $cu.Success) {
   $errors += 'changeuuid() function not found'
 } elseif ($cu.Value -notmatch '\(\.inbounds\[1\]\.users\[0\]\.password\)\s*=\s*\$u') {
   $errors += 'changeuuid() no longer rewrites the hysteria2 password'
+}
+
+# 18) the WARP-WireGuard channel (restored in fork.11) must stay intact:
+#     install registers its own Cloudflare account (no python3/xxd), both
+#     server templates carry the wireguard outbound, and the domain-split menu
+#     writes the four channels by JSON path.
+$warpfn = [regex]::Match($text, '(?ms)^warpwg\(\)\{.*?^\}')
+if (-not $warpfn.Success) {
+  $errors += 'warpwg() function not found (WARP-WireGuard account registration)'
+} else {
+  if ($warpfn.Value -notmatch 'api\.cloudflareclient\.com') {
+    $errors += 'warpwg() no longer registers a Cloudflare WARP account'
+  }
+  if ($warpfn.Value -match '(?i)\bpython3?\b|\bxxd\b') {
+    $errors += 'warpwg() reintroduced the removed python3/xxd dependencies'
+  }
+}
+$install = [regex]::Match($text, '(?ms)^instsllsingbox\(\)\{.*?^\}')
+if (-not $install.Success) {
+  $errors += 'instsllsingbox() not found'
+} elseif ($install.Value -notmatch '(?m)^warpwg\r?$') {
+  $errors += 'install flow no longer calls warpwg()'
+}
+$wg10 = [regex]::Match($text, '(?ms)^cat > /etc/s-box/sb10\.json <<EOF\r?\n(.*?)^EOF\r?$')
+if (-not $wg10.Success) {
+  $errors += 'sb10 config template not found (guard 18)'
+} else {
+  if ($wg10.Groups[1].Value -notmatch '"type":"wireguard"') {
+    $errors += 'sb10 template lost the wireguard outbound'
+  }
+  $n = [regex]::Matches($wg10.Groups[1].Value, '"domain_suffix"').Count
+  if ($n -ne 4) { $errors += "sb10 template domain-split rule count changed: $n (expected 4)" }
+}
+$wg11 = [regex]::Match($text, '(?ms)^cat > /etc/s-box/sb11\.json <<EOF\r?\n(.*?)^EOF\r?$')
+if (-not $wg11.Success) {
+  $errors += 'sb11 config template not found (guard 18)'
+} else {
+  $b11 = $wg11.Groups[1].Value
+  if ($b11 -notmatch '"endpoints"') { $errors += 'sb11 template lost the wireguard endpoints array' }
+  if ($b11 -notmatch '"type":"wireguard"') { $errors += 'sb11 template lost the wireguard endpoint' }
+  $n20 = [regex]::Matches($b11, '"action": "resolve"').Count
+  if ($n20 -ne 4) { $errors += "sb11 resolve-rule count changed: $n20 (expected 4)" }
+  $n21 = [regex]::Matches($b11, '"domain_suffix"').Count
+  if ($n21 -ne 8) { $errors += "sb11 domain-split rule count changed: $n21 (expected 8)" }
+  $n22 = [regex]::Matches($b11, '"outbound": "warp-out"').Count
+  if ($n22 -ne 2) { $errors += "sb11 warp-out rule count changed: $n22 (expected 2)" }
+}
+$flfn = [regex]::Match($text, '(?ms)^changefl\(\)\{.*?^\}')
+if (-not $flfn.Success) {
+  $errors += 'changefl() function not found (domain-split menu)'
+} elseif ($flfn.Value -notmatch '\(\.route\.rules\[\$a\]\.domain_suffix\)') {
+  $errors += 'changefl() no longer writes the split domains by JSON path'
 }
 
 if ($errors.Count) {

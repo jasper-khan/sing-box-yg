@@ -3,7 +3,7 @@ param(
     [string]$Script,
     [string[]]$ExpectSb10 = @('vless', 'hysteria2'),
     [string[]]$ExpectSb11 = @('vless', 'hysteria2'),
-    [string[]]$ExpectSb10Outbounds = @('direct', 'block'),
+    [string[]]$ExpectSb10Outbounds = @('direct', 'direct', 'direct', 'direct', 'direct', 'wireguard', 'block'),
     [string[]]$ExpectSb11Outbounds = @('direct')
 )
 
@@ -167,9 +167,9 @@ $expectedTypes = @{
 foreach ($name in @('sb10', 'sb11')) {
     $template = $templates[$name]
 
-    $forbidden = [regex]::Match([regex]::Unescape($template), '(?i)\b(?:wireguard|warp|wg-quick|cfwarp)\b|"endpoints"\s*:')
+    $forbidden = [regex]::Match([regex]::Unescape($template), '(?i)\b(?:warp-plus|sbwpph|socks-out|warp-socks5|psiphon|cfwarp|cloudflared)\b')
     if ($forbidden.Success) {
-        Stop-WithError ("{0}.json template contains a forbidden wireguard/WARP marker: {1}" -f $name, $forbidden.Value)
+        Stop-WithError ("{0}.json template contains a dropped WARP-Socks5 marker: {1}" -f $name, $forbidden.Value)
     }
 
     $json = Convert-TemplateToJson -Name $name -Template $template
@@ -186,6 +186,50 @@ foreach ($name in @('sb10', 'sb11')) {
         -Actual @($json.inbounds | ForEach-Object { [string]$_.type })
     Assert-ExactTypes -Name $name -Kind 'outbound' -Expected @($expectedOutbounds[$name]) `
         -Actual @($json.outbounds | ForEach-Object { [string]$_.type })
+
+    $rules = @($json.route.rules)
+
+    if ($name -eq 'sb10') {
+        if ($rules.Count -ne 6) {
+            Stop-WithError ("sb10.json rule count is {0} (expected 6: quic block + 4 split channels + fallback)." -f $rules.Count)
+        }
+
+        $splitOutbounds = @('warp-IPv4-out', 'warp-IPv6-out', 'vps-outbound-v4', 'vps-outbound-v6')
+        for ($index = 0; $index -lt $splitOutbounds.Count; $index++) {
+            $rule = $rules[1 + $index]
+            $actual = if ($rule.PSObject.Properties['outbound']) { [string]$rule.outbound } else { '' }
+            if ($actual -cne $splitOutbounds[$index]) {
+                Stop-WithError ("sb10.json rule[{0}] outbound is '{1}' (expected '{2}')." -f (1 + $index), $actual, $splitOutbounds[$index])
+            }
+        }
+    }
+    else {
+        if ($null -eq $json.PSObject.Properties['endpoints'] -or $null -eq $json.endpoints) {
+            Stop-WithError 'sb11.json has no endpoints array (WARP-WireGuard endpoint).'
+        }
+        Assert-ExactTypes -Name $name -Kind 'endpoint' -Expected @('wireguard') `
+            -Actual @($json.endpoints | ForEach-Object { [string]$_.type })
+
+        if ($rules.Count -ne 10) {
+            Stop-WithError ("sb11.json rule count is {0} (expected 10: sniff + 4 resolve/outbound pairs + fallback)." -f $rules.Count)
+        }
+
+        $splitTargets = @('warp-out', 'warp-out', 'direct', 'direct')
+        $splitStrategies = @('prefer_ipv4', 'prefer_ipv6', 'prefer_ipv4', 'prefer_ipv6')
+        for ($index = 0; $index -lt $splitTargets.Count; $index++) {
+            $resolveRule = $rules[1 + 2 * $index]
+            $routeRule = $rules[2 + 2 * $index]
+            $actualAction = if ($resolveRule.PSObject.Properties['action']) { [string]$resolveRule.action } else { '' }
+            $actualStrategy = if ($resolveRule.PSObject.Properties['strategy']) { [string]$resolveRule.strategy } else { '' }
+            $actualOutbound = if ($routeRule.PSObject.Properties['outbound']) { [string]$routeRule.outbound } else { '' }
+            if ($actualAction -cne 'resolve' -or $actualStrategy -cne $splitStrategies[$index]) {
+                Stop-WithError ("sb11.json rule[{0}] is not resolve/{1}." -f (1 + 2 * $index), $splitStrategies[$index])
+            }
+            if ($actualOutbound -cne $splitTargets[$index]) {
+                Stop-WithError ("sb11.json rule[{0}] outbound is '{1}' (expected '{2}')." -f (2 + 2 * $index), $actualOutbound, $splitTargets[$index])
+            }
+        }
+    }
 }
 
 Write-Host 'OK'

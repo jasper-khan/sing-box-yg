@@ -1,14 +1,12 @@
-v26.4.12-fork.10更新内容：
+v26.4.12-fork.11更新内容：
 
-注意：从旧的多协议版本升级，必须先卸载再重装；只点菜单6更新脚本不会清理旧配置中的其它协议 inbound。
+注意：从 fork.11 之前的版本升级，必须先卸载再重装；只点菜单6更新脚本不会注册 WARP 账户，也不会重建 sb10/sb11 的 wireguard 出站与分流规则。
 
 更新内容：
-1、修复：菜单 3→4 改 UUID 时同步更新 hysteria2 密码（此前 hy2 会静默失效）
-2、修复：本地 IP 探测失败时不再写入空的分享链接 IP
-3、修复：自备通配符证书（*.example.com）不再把 *. 写进 hy2 的 SNI
-4、修复：切换内核前先校验 sb10/sb11.json，缺失时保留原配置并给出提示
-5、修复：版本戳改用 curl --fail 并校验非空，网络失败不再写出空版本号
-6、清理：移除死依赖 xxd、python3，以及 chip() 里的死代码
-7、fork-check 加固：URL 归属逐条校验（含 lnsb/upsbyg 函数体）、协议/Argo 关键词加宽、守卫 5b 改为 fail-closed、变更配置选项数校验、补 websbox 回流检查、新增 version 文件与「UUID 同步 hy2 密码」守卫
+1、恢复上游 WARP-WireGuard：安装时自动注册 Cloudflare WARP 账户（openssl+curl+jq，不依赖 python3/xxd）
+2、恢复域名分流菜单（主菜单 3 → 6）：WARP-WireGuard-IPv4/IPv6 优先、VPS 本地 IPv4/IPv6 优先，共 4 个通道，双栈优先模式
+3、服务端模板：sb11 使用 endpoints 的 wireguard 端点 + resolve/outbound 成对规则（10 条），sb10 保留旧版 wireguard 出站 + 分流出站规则（6 条）
+4、仍然不做：WARP-Socks5/warp-plus、CFwarp 管理入口、WARP 端点 IP 优选、Argo、其它协议、GitLab/TG 推送、本地IP订阅
+5、守卫同步：fork-check 新增 WARP-WireGuard 结构守卫（账户注册函数、两个模板的 wireguard 出站与分流规则、按 JSON 路径写入的分流菜单），变更配置菜单选项数改为 6；render-configs 校验 endpoints 与 resolve/outbound 成对规则
 
 详见：https://github.com/jasper-khan/sing-box-yg

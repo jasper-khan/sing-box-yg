@@ -294,6 +294,28 @@ blue "节点名称已设置为：$sbnode"
 fi
 }
 
+warpwg(){
+red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+green "六、自动生成 WARP-WireGuard 出站账户" && sleep 2
+[[ "$ipv" == "prefer_ipv6" ]] && wgend='2606:4700:d0::a29f:c001' || wgend='162.159.192.1'
+openssl genpkey -algorithm X25519 -outform DER -out /etc/s-box/warp.key 2>/dev/null
+pvk=$(tail -c 32 /etc/s-box/warp.key | base64)
+wpk=$(openssl pkey -in /etc/s-box/warp.key -inform DER -pubout -outform DER 2>/dev/null | tail -c 32 | base64)
+rm -f /etc/s-box/warp.key
+warpres=$(curl -sL --connect-timeout 5 --max-time 15 -X POST 'https://api.cloudflareclient.com/v0a2158/reg' -H 'CF-Client-Version: a-7.21-0721' -H 'Content-Type: application/json' -d '{"key":"'"$wpk"'","tos":"'"$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')"'"}')
+wgaddr6=$(printf '%s' "$warpres" | jq -r '.config.interface.addresses.v6' 2>/dev/null)
+wgres=$(printf '%s' "$warpres" | jq -r '.config.client_id' 2>/dev/null | base64 -d 2>/dev/null | od -An -tu1 | tr -s ' ' | sed 's/^ //;s/ /, /g;s/^/[/;s/$/]/')
+wgres_ok=$(printf '%s' "$wgres" | sed -n 's/^\[[0-9]\{1,3\}, [0-9]\{1,3\}, [0-9]\{1,3\}\]$/ok/p')
+if [[ -z $pvk || -z $wpk || -z $wgaddr6 || $wgaddr6 = "null" || $wgres_ok != "ok" ]]; then
+red "自动注册 WARP-WireGuard 账户失败，请确认VPS可访问 api.cloudflareclient.com 后重新安装" && exit
+fi
+wgaddr6="$wgaddr6/128"
+blue "WARP-WireGuard账户生成成功 (对端：$wgend:2408)"
+blue "私钥：$pvk"
+blue "IPv6地址：$wgaddr6"
+blue "reserved值：$wgres"
+}
+
 inssbjsonser(){
 cat > /etc/s-box/sb10.json <<EOF
 {
@@ -360,6 +382,41 @@ cat > /etc/s-box/sb10.json <<EOF
 "domain_strategy": "$ipv"
 },
 {
+"type":"direct",
+"tag":"vps-outbound-v4",
+"domain_strategy":"prefer_ipv4"
+},
+{
+"type":"direct",
+"tag":"vps-outbound-v6",
+"domain_strategy":"prefer_ipv6"
+},
+{
+"type":"direct",
+"tag":"warp-IPv4-out",
+"detour":"wireguard-out",
+"domain_strategy":"prefer_ipv4"
+},
+{
+"type":"direct",
+"tag":"warp-IPv6-out",
+"detour":"wireguard-out",
+"domain_strategy":"prefer_ipv6"
+},
+{
+"type":"wireguard",
+"tag":"wireguard-out",
+"server":"$wgend",
+"server_port":2408,
+"local_address":[
+"172.16.0.2/32",
+"$wgaddr6"
+],
+"private_key":"$pvk",
+"peer_public_key":"bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+"reserved":$wgres
+},
+{
 "type": "block",
 "tag": "block"
 }
@@ -372,6 +429,30 @@ cat > /etc/s-box/sb10.json <<EOF
 "stun"
 ],
 "outbound": "block"
+},
+{
+"domain_suffix": [
+"yg_kkk"
+],
+"outbound": "warp-IPv4-out"
+},
+{
+"domain_suffix": [
+"yg_kkk"
+],
+"outbound": "warp-IPv6-out"
+},
+{
+"domain_suffix": [
+"yg_kkk"
+],
+"outbound": "vps-outbound-v4"
+},
+{
+"domain_suffix": [
+"yg_kkk"
+],
+"outbound": "vps-outbound-v6"
 },
 {
 "outbound": "direct",
@@ -449,6 +530,29 @@ cat > /etc/s-box/sb11.json <<EOF
 
 
 
+"endpoints": [
+{
+"type":"wireguard",
+"tag":"warp-out",
+"address":[
+"172.16.0.2/32",
+"$wgaddr6"
+],
+"private_key":"$pvk",
+"peers":[
+{
+"address":"$wgend",
+"port":2408,
+"public_key":"bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+"allowed_ips":[
+"0.0.0.0/0",
+"::/0"
+],
+"reserved":$wgres
+}
+]
+}
+],
 "outbounds": [
 {
 "type":"direct",
@@ -459,6 +563,58 @@ cat > /etc/s-box/sb11.json <<EOF
 "rules":[
 {
  "action": "sniff"
+},
+{
+"action": "resolve",
+"domain_suffix": [
+"yg_kkk"
+],
+"strategy": "prefer_ipv4"
+},
+{
+"domain_suffix": [
+"yg_kkk"
+],
+"outbound": "warp-out"
+},
+{
+"action": "resolve",
+"domain_suffix": [
+"yg_kkk"
+],
+"strategy": "prefer_ipv6"
+},
+{
+"domain_suffix": [
+"yg_kkk"
+],
+"outbound": "warp-out"
+},
+{
+"action": "resolve",
+"domain_suffix": [
+"yg_kkk"
+],
+"strategy": "prefer_ipv4"
+},
+{
+"domain_suffix": [
+"yg_kkk"
+],
+"outbound": "direct"
+},
+{
+"action": "resolve",
+"domain_suffix": [
+"yg_kkk"
+],
+"strategy": "prefer_ipv6"
+},
+{
+"domain_suffix": [
+"yg_kkk"
+],
+"outbound": "direct"
 },
 {
 "outbound": "direct",
@@ -629,7 +785,7 @@ private_key=$(echo "$key_pair" | awk '/PrivateKey/ {print $2}' | tr -d '"')
 public_key=$(echo "$key_pair" | awk '/PublicKey/ {print $2}' | tr -d '"')
 echo "$public_key" > /etc/s-box/public.key
 short_id=$(/etc/s-box/sing-box generate rand --hex 4)
-red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+warpwg
 inssbjsonser
 sbservice
 sbactive
@@ -898,11 +1054,53 @@ red "仅支持1.10.7内核可用" && exit
 fi
 }
 
+changefl(){
+if [[ "$sbnh" == "1.10" ]]; then fli=(1 2 3 4); else fli=(1 3 5 7); fi
+fln=("WARP-WireGuard-IPv4优先" "WARP-WireGuard-IPv6优先" "VPS本地-IPv4优先" "VPS本地-IPv6优先")
+echo
+blue "对所有协议进行统一的域名分流 (后缀域名方式，双栈优先模式)"
+green "当前分流域名如下："
+for i in 0 1 2 3; do
+flnow=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r ".route.rules[${fli[$i]}].domain_suffix | join(\" \")" 2>/dev/null)
+[[ -z $flnow || $flnow = "yg_kkk" ]] && flnow="未分流"
+blue "$((i+1))：${fln[$i]}：$flnow"
+done
+echo
+yellow "每个域名之间留空格 (例：netflix.com openai.com)，回车表示重置为不分流"
+readp "请选择要设置的分流通道【1-4】，回车返回上层：" menu
+if [[ ! "$menu" =~ ^[1-4]$ ]]; then
+changeserv
+return
+fi
+readp "请输入域名：" fl
+if [ -z "$fl" ]; then
+fl='["yg_kkk"]'
+else
+fl=$(printf '%s' "$fl" | tr -s ' \t' ' ' | sed 's/^ //;s/ $//;s/ /","/g')
+fl="[\"$fl\"]"
+fi
+if ! printf '%s' "$fl" | jq -e 'type == "array"' >/dev/null 2>&1; then
+red "域名格式有误，未做修改" && sleep 3 && changefl
+return
+fi
+for f in $sbfiles; do
+case "$f" in
+*/sb10.json) i1=$menu; i2=$menu ;;
+*/sb11.json) i1=$((2*menu-1)); i2=$((2*menu)) ;;
+*/sb.json) if [[ "$sbnh" == "1.10" ]]; then i1=$menu; i2=$menu; else i1=$((2*menu-1)); i2=$((2*menu)); fi ;;
+esac
+jq --argjson v "$fl" --argjson a "$i1" --argjson b "$i2" '(.route.rules[$a].domain_suffix) = $v | (.route.rules[$b].domain_suffix) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+restartsb && sbshare > /dev/null 2>&1
+green "分流域名已设置为：$fl"
+sleep 2 && changefl
+}
+
 changeserv(){
 sbactive
 echo
 green "Sing-box配置变更选择如下:"
-readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n0：返回上层\n请选择【0-5】：" menu
+readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n6：设置域名分流（WARP-WireGuard / VPS直连）\n0：返回上层\n请选择【0-6】：" menu
 if [ "$menu" = "1" ];then
 setcert
 elif [ "$menu" = "2" ];then
@@ -913,6 +1111,8 @@ elif [ "$menu" = "4" ];then
 changeuuid
 elif [ "$menu" = "5" ];then
 changeip
+elif [ "$menu" = "6" ];then
+changefl
 else 
 sb
 fi
@@ -1148,7 +1348,7 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 green " 1. 一键安装 Sing-box" 
 green " 2. 删除卸载 Sing-box"
 white "----------------------------------------------------------------------------------"
-green " 3. 变更配置 【证书/名称/域名/UUID/IP优先】"
+green " 3. 变更配置 【证书/名称/域名/UUID/IP优先/分流】"
 green " 4. 更改主端口/添加多端口跳跃复用" 
 green " 5. 关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"
