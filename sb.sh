@@ -57,6 +57,8 @@ else
 bbr="Openvz/Lxc"
 fi
 hostname=$(hostname)
+sbnode=$(cat /etc/s-box/nodename.log 2>/dev/null)
+sbnode=${sbnode:-$hostname}
 
 if [ ! -f sbyg_update ]; then
 green "首次安装Sing-box-yg脚本必要的依赖……"
@@ -276,6 +278,20 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 green "四、自动生成各个协议统一的uuid (密码)"
 uuid=$(/etc/s-box/sing-box generate uuid)
 blue "已确认uuid (密码)：${uuid}"
+}
+
+insname(){
+red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+green "五、设置节点名称"
+yellow "节点名称就是分享链接末尾显示的名字，回车使用默认主机名：$hostname"
+readp "请输入节点名称：" menu
+menu=$(printf '%s' "$menu" | tr -d '\r\n#')
+menu=$(printf '%s' "$menu" | tr ' \t' '--')
+if [ -n "$menu" ]; then
+printf '%s\n' "$menu" > /etc/s-box/nodename.log
+sbnode=$menu
+blue "节点名称已设置为：$sbnode"
+fi
 }
 
 inssbjsonser(){
@@ -562,7 +578,7 @@ hy2_name=${hy2_name:-www.bing.com}
 resvless(){
 echo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-vl_link="vless://$uuid@$server_ip:$vl_port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$vl_name&fp=chrome&pbk=$public_key&sid=$short_id&type=tcp&headerType=none#vl-reality-$hostname"
+vl_link="vless://$uuid@$server_ip:$vl_port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$vl_name&fp=chrome&pbk=$public_key&sid=$short_id&type=tcp&headerType=none#vl-reality-$sbnode"
 echo "$vl_link" > /etc/s-box/vl_reality.txt
 red "🚀【 vless-reality-vision 】节点信息如下：" && sleep 2
 echo
@@ -578,7 +594,7 @@ echo
 reshy2(){
 echo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=0&allowInsecure=0$hyps&sni=$hy2_name${SHA256:+&pinSHA256=$SHA256}#hy2-$hostname"
+hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=0&allowInsecure=0$hyps&sni=$hy2_name${SHA256:+&pinSHA256=$SHA256}#hy2-$sbnode"
 echo "$hy2_link" > /etc/s-box/hy2.txt
 red "🚀【 Hysteria-2 】节点信息如下：" && sleep 2
 echo
@@ -600,6 +616,7 @@ v6
 inssb
 inscertificate
 insport
+insname
 sleep 2
 echo
 blue "Vless-reality相关key与id将自动生成……"
@@ -644,6 +661,32 @@ done
 restartsb && sbshare > /dev/null 2>&1
 green "Hysteria2证书路径已更新：$certc_new"
 sleep 3 && sb
+}
+
+setname(){
+green "当前节点名称：$sbnode"
+readp "输入新的节点名称（回车保持当前，输入0恢复默认主机名）：" menu
+if [ -z "$menu" ]; then
+sb
+elif [ "$menu" = "0" ]; then
+rm -f /etc/s-box/nodename.log
+sbnode=$(hostname)
+sbshare > /dev/null 2>&1
+green "节点名称已恢复默认主机名：$sbnode"
+sleep 2 && sb
+else
+menu=$(printf '%s' "$menu" | tr -d '\r\n#')
+menu=$(printf '%s' "$menu" | tr ' \t' '--')
+if [ -z "$menu" ]; then
+red "节点名称无效" && sleep 2 && sb
+else
+printf '%s\n' "$menu" > /etc/s-box/nodename.log
+sbnode=$menu
+sbshare > /dev/null 2>&1
+green "节点名称已更新：$sbnode"
+sleep 2 && sb
+fi
+fi
 }
 
 changeym(){
@@ -850,16 +893,18 @@ changeserv(){
 sbactive
 echo
 green "Sing-box配置变更选择如下:"
-readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：更换Reality域名伪装地址\n3：更换全协议UUID(密码)\n4：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n5：设置本地IP订阅分享链接\n0：返回上层\n请选择【0-5】：" menu
+readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n6：设置本地IP订阅分享链接\n0：返回上层\n请选择【0-6】：" menu
 if [ "$menu" = "1" ];then
 setcert
 elif [ "$menu" = "2" ];then
-changeym
+setname
 elif [ "$menu" = "3" ];then
-changeuuid
+changeym
 elif [ "$menu" = "4" ];then
-changeip
+changeuuid
 elif [ "$menu" = "5" ];then
+changeip
+elif [ "$menu" = "6" ];then
 ipsub
 else 
 sb
@@ -1223,7 +1268,7 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 green " 1. 一键安装 Sing-box" 
 green " 2. 删除卸载 Sing-box"
 white "----------------------------------------------------------------------------------"
-green " 3. 变更配置 【证书/域名/UUID/IP优先/订阅】"
+green " 3. 变更配置 【证书/名称/域名/UUID/IP优先/订阅】"
 green " 4. 更改主端口/添加多端口跳跃复用" 
 green " 5. 关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"

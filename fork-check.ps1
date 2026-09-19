@@ -151,7 +151,7 @@ $cs = [regex]::Match($text, '(?ms)^changeserv\(\)\{.*?^\}')
 if (-not $cs.Success) {
   $errors += 'changeserv menu not found'
 } else {
-  foreach ($fn in 'setcert', 'changeym', 'changeuuid', 'changeip', 'ipsub') {
+  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changeip', 'ipsub') {
     if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
   }
 }
@@ -176,6 +176,11 @@ $removedFiles = 'serv00.sh', 'serv00keep.sh', 'serv00.yml', 'SSH.yml', 'kp.sh', 
 $backAgain = @($removedFiles | Where-Object { Test-Path (Join-Path $PSScriptRoot $_) })
 if ($backAgain.Count) {
   $errors += "deleted upstream files came back: $($backAgain -join ', ')"
+}
+
+# 12) share links must use the configurable node name (not the raw hostname).
+if ($text -notmatch '#vl-reality-\$sbnode' -or $text -notmatch '#hy2-\$sbnode') {
+  $errors += 'share links no longer use the configurable node name'
 }
 
 if ($errors.Count) {
