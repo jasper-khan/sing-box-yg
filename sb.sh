@@ -618,7 +618,7 @@ cat > /etc/s-box/sb11.json <<EOF
 },
 {
 "outbound": "direct",
-"network": "udp,tcp"
+"network": ["tcp","udp"]
 }
 ]
 }
