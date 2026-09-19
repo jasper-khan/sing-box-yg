@@ -246,11 +246,26 @@ port=$(shuf -i 10000-65535 -n 1)
 until [[ -z $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") && -z $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] 
 do
 [[ -n $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") || -n $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] && yellow "\n端口被占用，请重新输入端口" && readp "自定义端口:" port
+until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1000 && $((10#$port)) -le 65535 ]]
+do
+yellow "\n端口必须是1000-65535之间的数字" && readp "自定义端口:" port
+done
+port=$((10#$port))
 done
 else
+until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1000 && $((10#$port)) -le 65535 ]]
+do
+yellow "\n端口必须是1000-65535之间的数字" && readp "自定义端口:" port
+done
+port=$((10#$port))
 until [[ -z $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") && -z $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]]
 do
 [[ -n $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") || -n $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] && yellow "\n端口被占用，请重新输入端口" && readp "自定义端口:" port
+until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1000 && $((10#$port)) -le 65535 ]]
+do
+yellow "\n端口必须是1000-65535之间的数字" && readp "自定义端口:" port
+done
+port=$((10#$port))
 done
 fi
 blue "确认的端口：$port" && sleep 2
@@ -990,6 +1005,10 @@ if [ -z "$menu" ]; then
 subport=$(shuf -i 10000-65535 -n 1)
 else
 subport="$menu"
+if [[ ! $subport =~ ^[0-9]+$ || $((10#$subport)) -lt 1000 || $((10#$subport)) -gt 65535 ]]; then
+red "订阅链接端口必须是 1000-65535 的数字" && return 1
+fi
+subport=$((10#$subport))
 fi
 echo $subport > /etc/s-box/subport.log
 green "订阅链接端口：$(cat /etc/s-box/subport.log 2>/dev/null)"
@@ -1009,10 +1028,11 @@ elif [ "$menu" = "3" ];then
 subportipsub
 elif [ "$menu" = "4" ];then
 kill -15 $(pgrep -f 'websbox' 2>/dev/null) >/dev/null 2>&1
-crontab -l 2>/dev/null > /tmp/crontab.tmp
-sed -i '/websbox/d' /tmp/crontab.tmp
-crontab /tmp/crontab.tmp >/dev/null 2>&1
-rm /tmp/crontab.tmp
+tmpct=$(mktemp) || { red "创建临时文件失败"; return 1; }
+crontab -l 2>/dev/null > "$tmpct"
+sed -i '/websbox/d' "$tmpct"
+crontab "$tmpct" >/dev/null 2>&1
+rm -f "$tmpct"
 rm -rf /root/websbox
 rm -rf /etc/local.d/alpinesub.start
 green "本地IP订阅链接已卸载完成" && sleep 3 && exit
@@ -1044,11 +1064,12 @@ EOF
 chmod +x /etc/local.d/alpinesub.start
 rc-update add local default >/dev/null 2>&1
 else
-crontab -l 2>/dev/null > /tmp/crontab.tmp
-sed -i '/websbox/d' /tmp/crontab.tmp
-echo '@reboot sleep 10 && /bin/bash -c "busybox httpd -f -p $(cat /etc/s-box/subport.log 2>/dev/null) -h /root/websbox > /dev/null 2>&1 &"' >> /tmp/crontab.tmp
-crontab /tmp/crontab.tmp >/dev/null 2>&1
-rm /tmp/crontab.tmp
+tmpct=$(mktemp) || { red "创建临时文件失败"; return 1; }
+crontab -l 2>/dev/null > "$tmpct"
+sed -i '/websbox/d' "$tmpct"
+echo '@reboot sleep 10 && /bin/bash -c "busybox httpd -f -p $(cat /etc/s-box/subport.log 2>/dev/null) -h /root/websbox > /dev/null 2>&1 &"' >> "$tmpct"
+crontab "$tmpct" >/dev/null 2>&1
+rm -f "$tmpct"
 fi
 sbshare > /dev/null 2>&1
 sleep 1 && green "本地IP订阅链接已更新完成" && sleep 3 && sb
@@ -1176,19 +1197,21 @@ fi
 
 cronsb(){
 uncronsb
-crontab -l 2>/dev/null > /tmp/crontab.tmp
-echo "0 1 * * * systemctl restart sing-box;rc-service sing-box restart" >> /tmp/crontab.tmp
-crontab /tmp/crontab.tmp >/dev/null 2>&1
-rm /tmp/crontab.tmp
+tmpct=$(mktemp) || { red "创建临时文件失败"; return 1; }
+crontab -l 2>/dev/null > "$tmpct"
+echo "0 1 * * * systemctl restart sing-box;rc-service sing-box restart" >> "$tmpct"
+crontab "$tmpct" >/dev/null 2>&1
+rm -f "$tmpct"
 }
 uncronsb(){
-crontab -l 2>/dev/null > /tmp/crontab.tmp
-sed -i '/sing-box/d' /tmp/crontab.tmp
-sed -i '/sbwpph/d' /tmp/crontab.tmp
-sed -i '/websbox/d' /tmp/crontab.tmp
-sed -i '/cloudflared/d' /tmp/crontab.tmp
-crontab /tmp/crontab.tmp >/dev/null 2>&1
-rm /tmp/crontab.tmp
+tmpct=$(mktemp) || { red "创建临时文件失败"; return 1; }
+crontab -l 2>/dev/null > "$tmpct"
+sed -i '/sing-box/d' "$tmpct"
+sed -i '/sbwpph/d' "$tmpct"
+sed -i '/websbox/d' "$tmpct"
+sed -i '/cloudflared/d' "$tmpct"
+crontab "$tmpct" >/dev/null 2>&1
+rm -f "$tmpct"
 }
 
 lnsb(){
