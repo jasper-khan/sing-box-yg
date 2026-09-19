@@ -181,22 +181,9 @@ fi
 }
 
 inscertificate(){
-ymzs(){
 ym_vl_re=foothill.edu
-echo
-blue "Vless-reality的SNI域名默认为 foothill.edu"
-certificatec_hy2='/root/ygkkkca/cert.crt'
-certificatep_hy2='/root/ygkkkca/private.key'
-}
-
-zqzs(){
-ym_vl_re=foothill.edu
-echo
-blue "Vless-reality的SNI域名默认为 foothill.edu"
 certificatec_hy2='/etc/s-box/cert.pem'
 certificatep_hy2='/etc/s-box/private.key'
-}
-
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 green "二、生成并设置相关证书"
 echo
@@ -210,34 +197,7 @@ else
 red "生成bing自签证书失败" && exit
 fi
 echo
-if [[ -f /root/ygkkkca/cert.crt && -f /root/ygkkkca/private.key && -s /root/ygkkkca/cert.crt && -s /root/ygkkkca/private.key ]]; then
-yellow "经检测，之前已使用Acme-yg脚本申请过Acme域名IP证书：$(cat /root/ygkkkca/ca.log) "
-green "是否使用 $(cat /root/ygkkkca/ca.log) 域名IP证书？"
-yellow "1：否！使用自签的证书 (回车默认)"
-yellow "2：是！使用 $(cat /root/ygkkkca/ca.log) 域名IP证书"
-readp "请选择【1-2】：" menu
-if [ -z "$menu" ] || [ "$menu" = "1" ] ; then
-zqzs
-else
-ymzs
-fi
-else
-green "是否申请一个Acme域名IP证书？"
-yellow "1：否！继续使用自签的证书 (回车默认)"
-yellow "2：是！使用Acme-yg脚本申请Acme证书 (支持80端口域名IP证书模式与Dns API域名模式)"
-readp "请选择【1-2】：" menu
-if [ -z "$menu" ] || [ "$menu" = "1" ] ; then
-zqzs
-else
-bash <(curl -Ls https://raw.githubusercontent.com/yonggekkk/acme-yg/main/acme.sh)
-if [[ ! -f /root/ygkkkca/cert.crt && ! -f /root/ygkkkca/private.key && ! -s /root/ygkkkca/cert.crt && ! -s /root/ygkkkca/private.key ]]; then
-red "Acme证书申请失败，继续使用自签证书" 
-zqzs
-else
-ymzs
-fi
-fi
-fi
+blue "Vless-reality的SNI域名默认为 foothill.edu"
 }
 
 chooseport(){
@@ -571,10 +531,6 @@ fi
 }
 
 result_vl_hy2(){
-if [[ -f /root/ygkkkca/cert.crt && -f /root/ygkkkca/private.key && -s /root/ygkkkca/cert.crt && -s /root/ygkkkca/private.key ]]; then
-ym=`bash ~/.acme.sh/acme.sh --list | tail -1 | awk '{print $1}'`
-echo $ym > /root/ygkkkca/ca.log
-fi
 server_ip=$(cat /etc/s-box/server_ip.log)
 uuid=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].users[0].uuid')
 vl_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
@@ -589,17 +545,19 @@ hyps="&mport=$cmhy2pt"
 else
 hyps=
 fi
-ym=$(cat /root/ygkkkca/ca.log 2>/dev/null)
-hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path')
-if [[ "$hy2_sniname" = '/etc/s-box/private.key' ]]; then
-SHA256=$(openssl x509 -in /etc/s-box/cert.pem -outform DER | sha256sum | awk '{print $1}')
+hy2_certpath=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path' 2>/dev/null)
+hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
+if [[ "$hy2_sniname" = */etc/s-box/private.key ]]; then
+SHA256=$(openssl x509 -in "$hy2_certpath" -outform DER 2>/dev/null | sha256sum | awk '{print $1}')
 echo "$SHA256" > /etc/s-box/SHA256.txt
 SHA256=$(cat /etc/s-box/SHA256.txt)
 hy2_name=www.bing.com
 sb_hy2_ip=$server_ip
 else
-hy2_name=$ym
-sb_hy2_ip=$ym
+hy2_name=$(openssl x509 -in "$hy2_certpath" -noout -text 2>/dev/null | grep -oE 'DNS:[^, ]+' | head -n 1 | sed 's/DNS://')
+hy2_name=${hy2_name:-$(openssl x509 -in "$hy2_certpath" -noout -subject 2>/dev/null | sed 's/.*CN *= *//')}
+hy2_name=${hy2_name:-$server_ip}
+sb_hy2_ip=$hy2_name
 fi
 }
 
@@ -669,53 +627,41 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 echo
 }
 
-changeym(){
-[ -f /root/ygkkkca/ca.log ] && ymzs="$yellow切换为域名证书：$(cat /root/ygkkkca/ca.log 2>/dev/null)$plain" || ymzs="$yellow未申请域名证书，无法切换$plain"
-vl_na="正在使用的域名：$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')。$yellow更换符合reality要求的域名，不支持证书域名$plain"
-hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path')
-[[ "$hy2_sniname" = '/etc/s-box/private.key' ]] && hy2_na="正在使用自签bing证书。$ymzs" || hy2_na="正在使用的域名证书：$(cat /root/ygkkkca/ca.log 2>/dev/null)。$yellow切换为自签bing证书$plain"
+setcert(){
+certc_now=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path' 2>/dev/null)
+certp_now=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
 echo
-green "请选择要切换证书模式的协议"
-green "1：vless-reality协议，$vl_na"
-if [[ -f /root/ygkkkca/ca.log ]]; then
-green "2：Hysteria2协议，$hy2_na"
-else
-red "仅支持选项1 (vless-reality)。因未申请域名证书，Hysteria-2的证书切换选项暂不予显示"
+blue "当前证书：${certc_now:-未知}"
+blue "当前私钥：${certp_now:-未知}"
+echo
+readp "输入证书文件路径 (回车保持当前)：" certc_new
+readp "输入私钥文件路径 (回车保持当前)：" certp_new
+certc_new=${certc_new:-$certc_now}
+certp_new=${certp_new:-$certp_now}
+if [[ ! -f $certc_new || ! -f $certp_new ]]; then
+red "证书或私钥文件不存在，未做修改" && sleep 3 && sb
 fi
-green "0：返回上层"
-readp "请选择：" menu
-if [ "$menu" = "1" ]; then
-readp "请输入vless-reality域名 (回车使用foothill.edu)：" menu
-ym_vl_re=${menu:-foothill.edu}
+for f in $sbfiles; do
+jq --arg c "$certc_new" --arg k "$certp_new" '(.inbounds[1].tls.certificate_path) = $c | (.inbounds[1].tls.key_path) = $k' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+restartsb && sbshare > /dev/null 2>&1
+green "Hysteria2证书路径已更新：$certc_new"
+sleep 3 && sb
+}
+
+changeym(){
+echo
+vl_na="当前伪装域名：$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')"
+green "$vl_na"
+readp "请输入新的Reality伪装域名 (回车使用foothill.edu)：" ym_vl_re
+ym_vl_re=${ym_vl_re:-foothill.edu}
 for f in $sbfiles; do
 jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
-blue "Vless-reality域名证书更换完毕"
-elif [ "$menu" = "2" ]; then
-if [ -f /root/ygkkkca/ca.log ]; then
-c=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path')
-d=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path')
-if [ "$d" = '/etc/s-box/private.key' ]; then
-c_c='/root/ygkkkca/cert.crt'
-d_d='/root/ygkkkca/private.key'
-else
-c_c='/etc/s-box/cert.pem'
-d_d='/etc/s-box/private.key'
-fi
-for f in $sbfiles; do
-jq --arg c "$c_c" --arg k "$d_d" '(.inbounds[1].tls.certificate_path) = $c | (.inbounds[1].tls.key_path) = $k' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-done
-restartsb && sbshare > /dev/null 2>&1
-blue "Hysteria2协议域名证书更换完毕"
-else
-red "当前未申请域名证书，不可切换。主菜单选择11，执行Acme证书申请" && sleep 2 && sb
-fi
-else
-sb
-fi
+blue "Vless-reality伪装域名已更换为：$ym_vl_re"
+sleep 3 && sb
 }
-
 allports(){
 vl_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
 hy2_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
@@ -963,18 +909,20 @@ changeserv(){
 sbactive
 echo
 green "Sing-box配置变更选择如下:"
-readp "1：更换Reality域名伪装地址、切换自签证书与Acme域名证书\n2：更换全协议UUID(密码)\n3：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n4：设置Telegram推送节点通知\n5：设置Gitlab订阅分享链接\n6：设置本地IP订阅分享链接\n0：返回上层\n请选择【0-6】：" menu
+readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：更换Reality域名伪装地址\n3：更换全协议UUID(密码)\n4：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n5：设置Telegram推送节点通知\n6：设置Gitlab订阅分享链接\n7：设置本地IP订阅分享链接\n0：返回上层\n请选择【0-7】：" menu
 if [ "$menu" = "1" ];then
-changeym
+setcert
 elif [ "$menu" = "2" ];then
-changeuuid
+changeym
 elif [ "$menu" = "3" ];then
-changeip
+changeuuid
 elif [ "$menu" = "4" ];then
-tgsbshow
+changeip
 elif [ "$menu" = "5" ];then
-gitlabsub
+tgsbshow
 elif [ "$menu" = "6" ];then
+gitlabsub
+elif [ "$menu" = "7" ];then
 ipsub
 else 
 sb
@@ -1382,10 +1330,6 @@ sb
 fi
 }
 
-acme(){
-#bash <(curl -Ls https://gitlab.com/rwkgyg/acme-script/raw/main/acme.sh)
-bash <(curl -Ls https://raw.githubusercontent.com/yonggekkk/acme-yg/main/acme.sh)
-}
 bbr(){
 if [[ $vi =~ lxc|openvz ]]; then
 yellow "当前VPS的架构为 $vi，不支持开启原版BBR加速" && sleep 2 && exit 
@@ -1454,7 +1398,7 @@ white "-------------------------------------------------------------------------
 green " 8. 刷新并查看节点 【分享链接/聚合订阅/Gitlab订阅/推送TG通知】"
 green " 9. 查看 Sing-box 运行日志"
 green "10. 一键原版BBR+FQ加速"
-green "11. 管理 Acme 申请域名IP证书"
+green "11. 填写Hysteria2证书路径"
 green "12. 更换IP刷新本地IP、调整IPV4/IPV6配置输出"
 white "----------------------------------------------------------------------------------"
 green "13. Sing-box-yg脚本使用说明书"
@@ -1576,7 +1520,7 @@ case "$Input" in
  8 ) clash_sb_share;;
  9 ) sblog;;
  10 ) bbr;;
- 11 ) acme;;
+ 11 ) setcert;;
  12 ) ipuuid && sbshare;;
  13 ) sbsm;;
   * ) exit

@@ -22,10 +22,10 @@ foreach ($line in $lines) {
     $assigns += $Matches[1].Trim().Trim([char[]](34, 39))
   }
 }
-if ($assigns.Count -lt 3) {
-  $errors += "only $($assigns.Count) ym_vl_re assignment(s) found, expected at least 3"
+if ($assigns.Count -lt 1) {
+  $errors += "no ym_vl_re assignment found"
 }
-$bad = @($assigns | Where-Object { $_ -ne 'foothill.edu' -and $_ -ne '${menu:-foothill.edu}' })
+$bad = @($assigns | Where-Object { $_ -ne 'foothill.edu' -and $_ -ne '${menu:-foothill.edu}' -and $_ -ne '${ym_vl_re:-foothill.edu}' })
 if ($bad.Count) {
   $errors += "ym_vl_re assigned to non-foothill value: $($bad -join ' | ')"
 }
@@ -51,11 +51,11 @@ if ($blocks.Count -ne 2) {
   }
 }
 
-# 3) changeym must keep writing the reality domain by JSON path (no line numbers)
+# 3) the reality-domain setter must keep writing by JSON path (no line numbers)
 if ($text -notmatch 'jq --arg v "\$ym_vl_re"' -or
     $text -notmatch '\(\.inbounds\[0\]\.tls\.server_name\) = \$v' -or
     $text -notmatch '\(\.inbounds\[0\]\.tls\.reality\.handshake\.server\) = \$v') {
-  $errors += 'changeym reality-domain write-back is missing or no longer path-based'
+  $errors += 'reality-domain write-back is missing or no longer path-based'
 }
 
 # 4) self-update and version check must point at this fork

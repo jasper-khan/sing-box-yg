@@ -16,7 +16,7 @@
 
 * 支持纯IPV6、纯IPV4、双栈VPS，支持amd与arm架构，支持alpine系统，推荐使用最新的Ubuntu系统
 
-* 小白简单模式：无需域名证书，回车三次就安装完成，复制、扫描你要的节点配置
+* 小白简单模式：安装时自动生成自签证书，无需域名证书、也不再询问证书选项，回车三次就安装完成，复制、扫描你要的节点配置
 
 #### 相关说明及注意点请查看[甬哥博客说明与Sing-box视频教程](https://ygkkk.blogspot.com/2023/10/sing-box-yg.html)
 
@@ -51,7 +51,8 @@
 * 安装时不再询问或关闭服务器防火墙；端口确定后直接提示 VPS 防火墙/云安全组需要放行的 VLESS TCP 与 Hysteria2 UDP 入站端口。
 * WARP 相关功能同样已删除：wireguard 出站、WARP-plus-Socks5、CFwarp 管理入口，以及依赖 WARP 通道的"三通道域名分流"。服务端模板现在只有 `direct`（sb10 另有 `block`）。
 * 不再生成客户端配置文件：原 `sbox.json`（sing-box 客户端）与 `clmi.yaml`（Mihomo/Clash）的生成、分段推送、软链与 GitLab 发布已全部删除。订阅只提供两个协议的分享链接与聚合订阅 `jhsub.txt`（本地 IP 订阅、GitLab、TG 推送都只推这些）。
-* vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时提示处直接回车即可；已安装的可用菜单 `3` → `1` → `1` 更换。
+* vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时提示处直接回车即可；已安装的可用菜单 `3` → `2` 更换。
+* 自己申请的 Hysteria2 证书：用菜单 `3` → `1`（或主菜单 `11`）填写证书文件路径与私钥文件路径，脚本会校验文件存在、写入配置并重启服务。不填就继续用自签证书。
 * 脚本自更新、版本检查与上面的安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
 * 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认伪装域名、服务端模板结构、自更新 URL、协议范围、以及"不再按行号改配置 / 不再生成客户端配置"这些不变量都还在。
 * 服务端配置另可用 `tools/render-configs.ps1` 渲染校验（预期两个模板都只输出 `vless,hysteria2`）。
