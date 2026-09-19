@@ -1,10 +1,10 @@
-v26.4.12-fork.7更新内容：
+v26.4.12-fork.8更新内容：
 
 注意：从旧的多协议版本升级，必须先卸载再重装；只点菜单6更新脚本不会清理旧配置中的其它协议 inbound。
 
 更新内容：
-1、卸载清理精简：只处理本 fork 自己的组件（sing-box 服务、/etc/s-box、/usr/bin/sb、crontab 的 sing-box 行、SBHY2PORT 链）
-2、移除旧版残留清理：不再处理 Argo / WARP / wg-quick / warp-go / websbox / sbwpph / cloudflared / geoip.db / geosite.db（老机器需先用上游脚本卸载或手动清理）
-3、fork-check 新增 5b 守卫：unins/uncronsb 不得再引用上述旧功能残留
+1、面板去掉上游作者标识与推广：ASCII 标志、甬哥 Github/博客/YouTube 三行链接
+2、菜单 13“使用说明书”不再输出上游视频/博客/推广，只提示本 fork 项目地址与协议范围
+3、fork-check 新增第 14 项守卫：sb.sh 不得再出现 甬哥/ygkkk/blogspot/youtube 字样
 
 详见：https://github.com/jasper-khan/sing-box-yg

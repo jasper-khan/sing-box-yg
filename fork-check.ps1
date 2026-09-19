@@ -188,6 +188,13 @@ if ($subHits) {
   $errors += "local-IP subscription feature reappeared: $($subHits -join ', ')"
 }
 
+# 14) upstream promo/branding must stay out of the panel: no 甬哥 logo,
+#     no upstream Github/blog/YouTube links, no video-tutorial list.
+$promoHits = [regex]::Matches($text, '(?i)ygkkk|blogspot|youtube|youtu\.be|甬哥') | ForEach-Object { $_.Value } | Sort-Object -Unique
+if ($promoHits) {
+  $errors += "upstream promo/branding reappeared: $($promoHits -join ', ')"
+}
+
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1
