@@ -58,18 +58,36 @@ if ($text -notmatch 'jq --arg v "\$ym_vl_re"' -or
   $errors += 'reality-domain write-back is missing or no longer path-based'
 }
 
-# 4) self-update and version check must point at this fork
-if ($text -match 'raw\.githubusercontent\.com/yonggekkk/sing-box-yg/main/(sb\.sh|version)') {
-  $errors += 'self-update/version URL fell back to upstream, foothill.edu would be lost on update'
+# 4) self-update and version check must point at this fork. Every
+#    raw.githubusercontent.com/<owner>/sing-box-yg URL must be jasper-khan, and the
+#    functions that actually execute the download must carry the fork URL.
+$owners = [regex]::Matches($text, 'raw\.githubusercontent\.com/([^/\s"'']+)/sing-box-yg') |
+  ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+if (-not $owners.Count) {
+  $errors += 'no raw.githubusercontent.com/<owner>/sing-box-yg URL found at all'
+} else {
+  $badOwners = @($owners | Where-Object { $_ -ne 'jasper-khan' })
+  if ($badOwners.Count) {
+    $errors += "self-update/version URL points at another owner: $($badOwners -join ', ')"
+  }
 }
-if ($text -notmatch 'raw\.githubusercontent\.com/jasper-khan/sing-box-yg/main/sb\.sh') {
-  $errors += 'no self-update URL pointing at this fork'
+$lnsb = [regex]::Match($text, '(?ms)^lnsb\(\)\{.*?^\}')
+if (-not $lnsb.Success) {
+  $errors += 'lnsb() function not found (self-update cannot be verified)'
+} elseif ($lnsb.Value -notmatch 'raw\.githubusercontent\.com/jasper-khan/sing-box-yg/main/sb\.sh') {
+  $errors += 'lnsb() no longer downloads sb.sh from this fork'
+}
+$upsbyg = [regex]::Match($text, '(?ms)^upsbyg\(\)\{.*?^\}')
+if (-not $upsbyg.Success) {
+  $errors += 'upsbyg() function not found (version stamp cannot be verified)'
+} elseif ($upsbyg.Value -notmatch 'raw\.githubusercontent\.com/jasper-khan/sing-box-yg/main/version') {
+  $errors += 'upsbyg() no longer reads the version file from this fork'
 }
 
 # 5) fork scope: only vless-reality + hysteria2 may remain.
 #    Removed protocols must be gone, and the Argo tunnel feature must not come back.
 #    (unins/uncronsb must not reference removed-feature leftovers either: see 5b)
-$removed = [regex]::Matches($text, '(?i)\b(vmess|tuic|anytls)\b|cfargo|argoym|cloudflared tunnel') | ForEach-Object { $_.Value } | Sort-Object -Unique
+$removed = [regex]::Matches($text, '(?i)\b(?:vmess|tuic|anytls)\w*|\bargo\w*|cfargo|argoym|cloudflared') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($removed) {
   $errors += "removed protocol code reappeared: $($removed -join ', ')"
 }
@@ -94,10 +112,12 @@ foreach ($name in 'sb10', 'sb11') {
 #     websbox/sbwpph/cloudflared/geoip/geosite cleanup was removed on purpose.
 foreach ($fn in 'unins', 'uncronsb') {
   $body = [regex]::Match($text, "(?ms)^$fn\(\)\{.*?^\}")
-  if ($body.Success) {
-    $legacy = [regex]::Matches($body.Value, '(?i)\bargo\b|\bwarp-go\b|\bwg-quick\b|\bsbwpph\b|\bwebsbox\b|\bcloudflared\b|\bgeoip\.db\b|\bgeosite\.db\b') | ForEach-Object { $_.Value } | Sort-Object -Unique
-    if ($legacy) { $errors += "$fn still references removed-feature leftovers: $($legacy -join ', ')" }
+  if (-not $body.Success) {
+    $errors += "$fn() not found: guard 5b cannot verify removed-feature leftovers"
+    continue
   }
+  $legacy = [regex]::Matches($body.Value, '(?i)\bargo\b|\bwarp-go\b|\bwg-quick\b|\bsbwpph\b|\bwebsbox\b|\bcloudflared\b|\bgeoip\.db\b|\bgeosite\.db\b') | ForEach-Object { $_.Value } | Sort-Object -Unique
+  if ($legacy) { $errors += "$fn still references removed-feature leftovers: $($legacy -join ', ')" }
 }
 
 # 6) config files must be edited by JSON path (jq), never by fixed line numbers:
@@ -163,6 +183,10 @@ if (-not $cs.Success) {
   foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changeip') {
     if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
   }
+  $csOpts = [regex]::Matches($cs.Value, '"\$menu"\s*=\s*"([0-9]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+  if (($csOpts -join ',') -ne '1,2,3,4,5') {
+    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5)"
+  }
 }
 
 # 11) upstream Serv00 / web-UI / WARP-binary leftovers must stay deleted.
@@ -183,7 +207,7 @@ if ($text -match '#(?:vl-reality|hy2)-\$sbnode') {
 }
 
 # 13) the local-IP subscription server (busybox httpd) must stay removed.
-$subHits = [regex]::Matches($text, '(?i)\bipsub\b|subport\.log|subtoken\.log|busybox[^\r\n]*httpd|jhsub\.txt') | ForEach-Object { $_.Value } | Sort-Object -Unique
+$subHits = [regex]::Matches($text, '(?i)\bipsub\b|subport\.log|subtoken\.log|busybox[^\r\n]*httpd|jhsub\.txt|websbox') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($subHits) {
   $errors += "local-IP subscription feature reappeared: $($subHits -join ', ')"
 }
@@ -202,6 +226,26 @@ if ($text -notmatch 'fp=firefox') {
 }
 if ($text -match 'fp=chrome') {
   $errors += 'vless share link fell back to upstream fp=chrome'
+}
+
+# 16) the version file must stay fork-owned: upstream's would stamp the wrong
+#     version number and carry upstream promo links.
+$versionFile = Join-Path $PSScriptRoot 'version'
+if (-not (Test-Path $versionFile)) {
+  $errors += 'version file missing from the repo root'
+} else {
+  $verText = [System.IO.File]::ReadAllText($versionFile, [System.Text.Encoding]::UTF8)
+  if ($verText -notmatch '-fork\.') { $errors += 'version file lost the -fork. version tag' }
+  if ($verText -notmatch 'github\.com/jasper-khan/sing-box-yg') { $errors += 'version file no longer links to this fork' }
+}
+
+# 17) changeuuid() must rewrite the hysteria2 password as well, otherwise the
+#     second protocol silently keeps the old password after a UUID change.
+$cu = [regex]::Match($text, '(?ms)^changeuuid\(\)\{.*?^\}')
+if (-not $cu.Success) {
+  $errors += 'changeuuid() function not found'
+} elseif ($cu.Value -notmatch '\(\.inbounds\[1\]\.users\[0\]\.password\)\s*=\s*\$u') {
+  $errors += 'changeuuid() no longer rewrites the hysteria2 password'
 }
 
 if ($errors.Count) {

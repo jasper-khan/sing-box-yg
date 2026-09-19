@@ -1,9 +1,14 @@
-v26.4.12-fork.9更新内容：
+v26.4.12-fork.10更新内容：
 
 注意：从旧的多协议版本升级，必须先卸载再重装；只点菜单6更新脚本不会清理旧配置中的其它协议 inbound。
 
 更新内容：
-1、vless 分享链接默认 TLS 指纹改为 firefox（上游默认 chrome）
-2、fork-check 新增第 15 项守卫：分享链接不得回退到 fp=chrome
+1、修复：菜单 3→4 改 UUID 时同步更新 hysteria2 密码（此前 hy2 会静默失效）
+2、修复：本地 IP 探测失败时不再写入空的分享链接 IP
+3、修复：自备通配符证书（*.example.com）不再把 *. 写进 hy2 的 SNI
+4、修复：切换内核前先校验 sb10/sb11.json，缺失时保留原配置并给出提示
+5、修复：版本戳改用 curl --fail 并校验非空，网络失败不再写出空版本号
+6、清理：移除死依赖 xxd、python3，以及 chip() 里的死代码
+7、fork-check 加固：URL 归属逐条校验（含 lnsb/upsbyg 函数体）、协议/Argo 关键词加宽、守卫 5b 改为 fail-closed、变更配置选项数校验、补 websbox 回流检查、新增 version 文件与「UUID 同步 hy2 密码」守卫
 
 详见：https://github.com/jasper-khan/sing-box-yg

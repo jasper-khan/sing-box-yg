@@ -98,8 +98,8 @@ if [[ -z $vi ]]; then
 apt install iputils-ping iproute2 systemctl -y
 fi
 
-packages=("curl" "openssl" "iptables" "tar" "wget" "xxd" "python3" "qrencode")
-inspackages=("curl" "openssl" "iptables" "tar" "wget" "xxd" "python3" "qrencode")
+packages=("curl" "openssl" "iptables" "tar" "wget" "qrencode")
+inspackages=("curl" "openssl" "iptables" "tar" "wget" "qrencode")
 for i in "${!packages[@]}"; do
 package="${packages[$i]}"
 inspackage="${inspackages[$i]}"
@@ -532,7 +532,9 @@ fi
 else
 yellow "VPS并不是双栈VPS，不支持IP配置输出的切换"
 serip=$(curl -s4m5 icanhazip.com -k || curl -s6m5 icanhazip.com -k)
-if [[ "$serip" =~ : ]]; then
+if [[ -z $serip ]]; then
+red "本地IP探测失败（VPS网络异常），已保留原分享链接IP，请稍后重试"
+elif [[ "$serip" =~ : ]]; then
 server_ip="[$serip]"
 echo "$server_ip" > /etc/s-box/server_ip.log
 else
@@ -564,6 +566,7 @@ hy2_certpath=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.cert
 hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
 hy2_name=$(openssl x509 -in "$hy2_certpath" -noout -text 2>/dev/null | grep -oE 'DNS:[^, ]+' | head -n 1 | sed 's/DNS://')
 hy2_name=${hy2_name:-$(openssl x509 -in "$hy2_certpath" -noout -subject 2>/dev/null | sed 's/.*CN *= *//')}
+hy2_name=${hy2_name#\*.}
 SHA256=
 if [[ "$hy2_certpath" = '/etc/s-box/cert.pem' && "$hy2_sniname" = '/etc/s-box/private.key' ]]; then
 SHA256=$(openssl x509 -in "$hy2_certpath" -outform DER 2>/dev/null | sha256sum | awk '{print $1}')
@@ -630,7 +633,8 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 inssbjsonser
 sbservice
 sbactive
-curl -sL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1 > /etc/s-box/v
+newv=$(curl -fsSL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1)
+[[ -n $newv ]] && echo "$newv" > /etc/s-box/v
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 lnsb && blue "Sing-box-yg脚本安装成功，脚本快捷方式：sb" && cronsb
 echo
@@ -859,7 +863,7 @@ else
 red "uuid 格式不正确，未做修改" && sleep 3 && return
 fi
 for f in $sbfiles; do
-jq --arg u "$uuid" '(.inbounds[0].users[0].uuid) = $u' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+jq --arg u "$uuid" '(.inbounds[0].users[0].uuid) = $u | (.inbounds[1].users[0].password) = $u' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
 blue "已确认uuid (密码)：${uuid}"
@@ -872,7 +876,6 @@ changeip(){
 if [[ "$sbnh" == "1.10" ]]; then
 v4v6
 chip(){
-rpip=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.outbounds[0].domain_strategy')
 jq --arg v "$rrpip" '(.outbounds[0].domain_strategy) = $v' /etc/s-box/sb10.json > /etc/s-box/sb10.json.tmp && mv /etc/s-box/sb10.json.tmp /etc/s-box/sb10.json
 cp /etc/s-box/sb10.json /etc/s-box/sb.json
 restartsb
@@ -979,7 +982,8 @@ if [[ ! -f '/usr/bin/sb' ]]; then
 red "未正常安装Sing-box-yg" && exit
 fi
 if lnsb; then
-curl -sL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1 > /etc/s-box/v
+newv=$(curl -fsSL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1)
+[[ -n $newv ]] && echo "$newv" > /etc/s-box/v
 green "Sing-box-yg安装脚本升级成功" && sleep 5 && sb
 else
 red "更新失败，已保留原有脚本" && sleep 3 && sb
@@ -1032,9 +1036,12 @@ mv -f /etc/s-box/$sbname/sing-box /etc/s-box/sing-box
 rm -rf /etc/s-box/sing-box.tar.gz /etc/s-box/$sbname
 sbnh=$(/etc/s-box/sing-box version 2>/dev/null | awk '/version/{print $NF}' 2>/dev/null | cut -d '.' -f 1,2)
 [[ "$sbnh" == "1.10" ]] && num=10 || num=11
-rm -rf /etc/s-box/sb.json
-cp /etc/s-box/sb${num}.json /etc/s-box/sb.json
+if [[ -f /etc/s-box/sb${num}.json ]]; then
+cp -f /etc/s-box/sb${num}.json /etc/s-box/sb.json
 restartsb && sbshare > /dev/null 2>&1
+else
+red "未找到 /etc/s-box/sb${num}.json，配置未切换，请重装脚本" && sleep 3
+fi
 blue "成功升级/切换 Sing-box 内核版本：$(/etc/s-box/sing-box version | awk '/version/{print $NF}')" && sleep 3 && sb
 else
 rm -rf /etc/s-box/sing-box.tar.gz /etc/s-box/$sbname
