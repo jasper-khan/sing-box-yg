@@ -171,6 +171,13 @@ if ($cs.Success -and (Test-Path $readmePath)) {
   }
 }
 
+# 11) upstream Serv00 / web-UI / WARP-binary leftovers must stay deleted.
+$removedFiles = 'serv00.sh', 'serv00keep.sh', 'serv00.yml', 'SSH.yml', 'kp.sh', 'sb.txt', 'app.js', 'index.html', 'sversion', 'workers_keep.js', 'sbwpph_amd64', 'sbwpph_arm64'
+$backAgain = @($removedFiles | Where-Object { Test-Path (Join-Path $PSScriptRoot $_) })
+if ($backAgain.Count) {
+  $errors += "deleted upstream files came back: $($backAgain -join ', ')"
+}
+
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1
