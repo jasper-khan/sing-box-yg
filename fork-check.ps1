@@ -296,8 +296,16 @@ if (-not $wg11.Success) {
 $flfn = [regex]::Match($text, '(?ms)^changefl\(\)\{.*?^\}')
 if (-not $flfn.Success) {
   $errors += 'changefl() function not found (domain-split menu)'
-} elseif ($flfn.Value -notmatch '\(\.route\.rules\[\$a\]\.domain_suffix\)') {
-  $errors += 'changefl() no longer writes the split domains by JSON path'
+} else {
+  if ($flfn.Value -notmatch '\(\.route\.rules\[\$a\]\.domain_suffix\)') {
+    $errors += 'changefl() no longer writes the split domains by JSON path'
+  }
+  if ($flfn.Value -notmatch '\$menu" = "5"') {
+    $errors += 'changefl() lost the global-egress option (menu 3 -> 6 -> 5)'
+  }
+  if ($flfn.Value -notmatch '\(\.route\.rules\[\$i\]\.outbound\)') {
+    $errors += 'changefl() no longer writes the global egress by JSON path'
+  }
 }
 
 if ($errors.Count) {

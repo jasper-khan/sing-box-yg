@@ -1,11 +1,12 @@
-v26.4.12-fork.12更新内容：
+v26.4.12-fork.13更新内容：
 
 注意：从 fork.11 之前的版本升级，必须先卸载再重装；只点菜单6更新脚本不会注册 WARP 账户，也不会重建 sb10/sb11 的 wireguard 出站与分流规则。
 
 更新内容：
-1、修复：sb11（1.11 以上内核）兜底分流规则改用 network 列表写法 ["tcp","udp"]（旧的 "udp,tcp" 字符串在 1.14 上会被静默忽略，真机实测确认）
-2、fork.11：恢复上游 WARP-WireGuard：安装时自动注册 Cloudflare WARP 账户（openssl+curl+jq，不依赖 python3/xxd）
-3、fork.11：恢复域名分流菜单（主菜单 3 → 6）：WARP-WireGuard-IPv4/IPv6 优先、VPS 本地 IPv4/IPv6 优先，共 4 个通道，双栈优先模式
-4、仍然不做：WARP-Socks5/warp-plus、CFwarp 管理入口、WARP 端点 IP 优选、Argo、其它协议、GitLab/TG 推送、本地IP订阅
+1、菜单 3 → 6 新增第 5 项“其余流量出口”：一键在「全局 Cloudflare WARP」与「全局 VPS 直连（默认）」之间切换，不用逐个填域名就能全局走 WARP
+2、1-4 号通道语义不变：给指定域名选出口（从上往下先匹配先生效），全局 WARP 时把要直连的域名填到 3/4 号通道即可当白名单用
+3、仍按 jq 字段路径写入（sb10/sb11/sb.json 三份同步），切换后自动重启；fork-check 新增该项守卫
+4、fork.12：sb11 兜底分流规则 network 改用列表写法（旧字符串在 1.14 会被静默忽略）
+5、fork.11：恢复上游 WARP-WireGuard（安装时自动注册账户 + wireguard 出站 + 域名分流菜单）
 
 详见：https://github.com/jasper-khan/sing-box-yg

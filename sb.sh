@@ -1055,7 +1055,7 @@ fi
 }
 
 changefl(){
-if [[ "$sbnh" == "1.10" ]]; then fli=(1 2 3 4); else fli=(1 3 5 7); fi
+if [[ "$sbnh" == "1.10" ]]; then fli=(1 2 3 4); flb=5; else fli=(1 3 5 7); flb=9; fi
 fln=("WARP-WireGuard-IPv4优先" "WARP-WireGuard-IPv6优先" "VPS本地-IPv4优先" "VPS本地-IPv6优先")
 echo
 blue "对所有协议进行统一的域名分流 (后缀域名方式，双栈优先模式)"
@@ -1065,9 +1065,38 @@ flnow=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r ".route.rules[${fli[$i]}].dom
 [[ -z $flnow || $flnow = "yg_kkk" ]] && flnow="未分流"
 blue "$((i+1))：${fln[$i]}：$flnow"
 done
+flog=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r ".route.rules[$flb].outbound" 2>/dev/null)
+case "$flog" in
+warp-out|warp-IPv4-out|warp-IPv6-out) flog="全局走 Cloudflare WARP" ;;
+*) flog="全局走 VPS 直连 (默认)" ;;
+esac
+blue "5：其余流量出口：$flog"
 echo
-yellow "每个域名之间留空格 (例：netflix.com openai.com)，回车表示重置为不分流"
-readp "请选择要设置的分流通道【1-4】，回车返回上层：" menu
+yellow "1-4：给指定域名选通道，多个域名之间留空格 (例：netflix.com openai.com)，回车表示重置为不分流"
+yellow "5：设置上面 4 个通道都没匹配到的域名走哪里 (全局 WARP / 全局直连)"
+readp "请选择【1-5】，回车返回上层：" menu
+if [ "$menu" = "5" ]; then
+echo
+green "当前其余流量出口：$flog"
+readp "1：其余流量走 Cloudflare WARP\n2：其余流量走 VPS 直连 (默认)\n0：返回上层\n请选择【0-2】：" gmen
+case "$gmen" in
+1) gw11="warp-out"; gw10="warp-IPv4-out"; gwnow="全局走 Cloudflare WARP" ;;
+2) gw11="direct"; gw10="direct"; gwnow="全局走 VPS 直连" ;;
+*) changefl; return ;;
+esac
+for f in $sbfiles; do
+case "$f" in
+*/sb10.json) gi=$flb; gv=$gw10 ;;
+*/sb11.json) gi=9; gv=$gw11 ;;
+*/sb.json) if [[ "$sbnh" == "1.10" ]]; then gi=$flb; gv=$gw10; else gi=9; gv=$gw11; fi ;;
+esac
+jq --arg v "$gv" --argjson i "$gi" '(.route.rules[$i].outbound) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+restartsb && sbshare > /dev/null 2>&1
+green "其余流量出口已设置为：$gwnow"
+sleep 2 && changefl
+return
+fi
 if [[ ! "$menu" =~ ^[1-4]$ ]]; then
 changeserv
 return

@@ -8,7 +8,11 @@
 * 支持纯 IPv4、纯 IPv6、双栈 VPS；amd64/arm64 架构；Alpine 系统下不支持查看运行日志。
 * 安装时不再询问或关闭服务器防火墙；端口确定后直接提示 VPS 防火墙/云安全组需要放行的 VLESS TCP 与 Hysteria2 UDP 入站端口。
 * WARP-WireGuard 出站（fork.11 起恢复）：安装时脚本用 openssl + curl 自动注册一个 Cloudflare WARP 账户（私钥 / IPv6 地址 / reserved 值），不依赖 python3、xxd；WARP-plus-Socks5、warp-plus 二进制、CFwarp 管理入口、端点 IP 优选一律不做。
-* 域名分流（菜单 `3` → `6`）：4 个通道 —— WARP-WireGuard-IPv4 优先 / WARP-WireGuard-IPv6 优先 / VPS 本地-IPv4 优先 / VPS 本地-IPv6 优先。填后缀域名（多个用空格分隔，回车表示该通道不分流），双栈优先模式；写入按 jq 字段路径，改完自动重启服务。sb11（1.11 以上内核）用 `endpoints` 的 wireguard 端点 + `resolve`/`outbound` 成对规则，sb10（1.10 内核）用旧版 wireguard 出站 + 分流出站规则。
+* 域名分流（菜单 `3` → `6`）：
+  * `1`-`4` 号通道按域名分流 —— WARP-WireGuard-IPv4 优先 / WARP-WireGuard-IPv6 优先 / VPS 本地-IPv4 优先 / VPS 本地-IPv6 优先；填后缀域名（多个用空格分隔，回车表示该通道不分流）。
+  * `5` 号是**“其余流量出口”**：一键在「全局 Cloudflare WARP」与「全局 VPS 直连（默认）」之间切换，不用填域名就能全局走 WARP。
+  * 规则从上往下先匹配先生效：全局 WARP 时，把需要走 VPS 原生 IP 的域名填进 `3`/`4` 号通道即当直连白名单用。
+  * 写入按 jq 字段路径（`sb10.json`/`sb11.json`/`sb.json` 三份同步），改完自动重启服务。sb11（1.11 以上内核）用 `endpoints` 的 wireguard 端点 + `resolve`/`outbound` 成对规则，sb10（1.10 内核）用旧版 wireguard 出站 + 分流出站规则。
 * 不再生成客户端配置文件：原 `sbox.json`（sing-box 客户端）与 `clmi.yaml`（Mihomo/Clash）的生成、分段推送、软链与 GitLab 发布已全部删除。只提供两个协议的分享链接（菜单 8 打印或扫码）。vless 分享链接默认 TLS 指纹为 `fp=firefox`（上游默认 chrome）。
 * 本地IP订阅（busybox httpd 订阅服务）已删除：不再有 `subport.log` / `subtoken.log` / `/root/websbox`，也不会占额外端口。
 * GitLab 订阅发布与 Telegram 推送已删除：脚本里不再有这两项功能，“变更配置”菜单只剩 5 项（证书路径 / 节点名称 / Reality 域名 / UUID / IP 优先级），依赖里也不再安装 `git`、`expect`。
