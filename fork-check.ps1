@@ -306,6 +306,9 @@ if (-not $flfn.Success) {
   if ($flfn.Value -notmatch '\(\.route\.rules\[\$i\]\.outbound\)') {
     $errors += 'changefl() no longer writes the global egress by JSON path'
   }
+  if ($flfn.Value -notmatch '\*/sb10\.json\) gi=5') {
+    $errors += 'changefl() global egress no longer pins the sb10 fallback index to 5'
+  }
 }
 
 if ($errors.Count) {

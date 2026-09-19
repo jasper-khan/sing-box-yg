@@ -1086,9 +1086,9 @@ case "$gmen" in
 esac
 for f in $sbfiles; do
 case "$f" in
-*/sb10.json) gi=$flb; gv=$gw10 ;;
+*/sb10.json) gi=5; gv=$gw10 ;;
 */sb11.json) gi=9; gv=$gw11 ;;
-*/sb.json) if [[ "$sbnh" == "1.10" ]]; then gi=$flb; gv=$gw10; else gi=9; gv=$gw11; fi ;;
+*/sb.json) if [[ "$sbnh" == "1.10" ]]; then gi=5; gv=$gw10; else gi=9; gv=$gw11; fi ;;
 esac
 jq --arg v "$gv" --argjson i "$gi" '(.route.rules[$i].outbound) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
