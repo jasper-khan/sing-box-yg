@@ -141,6 +141,21 @@ if ($text -notmatch 'Vless-reality\uFF1ATCP \$port_vl_re' -or
     $text -notmatch 'Hysteria-2\uFF1AUDP \$port_hy2') {
   $errors += 'install no longer prints the VLESS/Hysteria2 inbound port reminder'
 }
+# 9) GitLab publishing and Telegram push must stay removed, and "变更配置"
+#    must stay at the 5 remaining interaction points.
+$pushHits = [regex]::Matches($text, '(?i)gitlab|telegram|sbtg\.sh|gitpush\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique
+if ($pushHits) {
+  $errors += "gitlab/telegram feature reappeared: $($pushHits -join ', ')"
+}
+$cs = [regex]::Match($text, '(?ms)^changeserv\(\)\{.*?^\}')
+if (-not $cs.Success) {
+  $errors += 'changeserv menu not found'
+} else {
+  foreach ($fn in 'setcert', 'changeym', 'changeuuid', 'changeip', 'ipsub') {
+    if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
+  }
+}
+
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1

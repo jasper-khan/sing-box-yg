@@ -14,7 +14,6 @@ white(){ echo -e "\033[37m\033[01m$1\033[0m";}
 readp(){ read -p "$(yellow "$1")" $2;}
 [[ $EUID -ne 0 ]] && yellow "请以root模式运行脚本" && exit
 stty erase $'\b' 2>/dev/null || stty erase '^H' 2>/dev/null
-#[[ -e /etc/hosts ]] && grep -qE '^ *172.65.251.78 gitlab.com' /etc/hosts || echo -e '\n172.65.251.78 gitlab.com' >> /etc/hosts
 if [[ -f /etc/redhat-release ]]; then
 release="Centos"
 elif cat /etc/issue | grep -q -E -i "alpine"; then
@@ -63,7 +62,7 @@ if [ ! -f sbyg_update ]; then
 green "首次安装Sing-box-yg脚本必要的依赖……"
 if command -v apk >/dev/null 2>&1; then
 apk update
-apk add bash libc6-compat jq openssl procps busybox-extras iproute2 iputils coreutils expect git socat iptables grep tar tzdata util-linux
+apk add bash libc6-compat jq openssl procps busybox-extras iproute2 iputils coreutils socat iptables grep tar tzdata util-linux
 apk add virt-what
 else
 if [[ $release = Centos && ${vsid} =~ 8 ]]; then
@@ -97,8 +96,8 @@ if [[ -z $vi ]]; then
 apt install iputils-ping iproute2 systemctl -y
 fi
 
-packages=("curl" "openssl" "iptables" "tar" "expect" "wget" "xxd" "python3" "qrencode" "git")
-inspackages=("curl" "openssl" "iptables" "tar" "expect" "wget" "xxd" "python3" "qrencode" "git")
+packages=("curl" "openssl" "iptables" "tar" "wget" "xxd" "python3" "qrencode")
+inspackages=("curl" "openssl" "iptables" "tar" "wget" "xxd" "python3" "qrencode")
 for i in "${!packages[@]}"; do
 package="${packages[$i]}"
 inspackage="${inspackages[$i]}"
@@ -614,7 +613,6 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 inssbjsonser
 sbservice
 sbactive
-#curl -sL https://gitlab.com/rwkgyg/sing-box-yg/-/raw/main/version/version | awk -F "更新内容" '{print $1}' | head -n 1 > /etc/s-box/v
 curl -sL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1 > /etc/s-box/v
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 lnsb && blue "Sing-box-yg脚本安装成功，脚本快捷方式：sb" && cronsb
@@ -622,7 +620,7 @@ echo
 ipuuid
 sbshare
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-blue "可选择8，刷新并显示分享链接、聚合订阅、Gitlab订阅，或推送TG通知"
+blue "可选择8，刷新并显示分享链接与聚合订阅"
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 echo
 }
@@ -849,67 +847,11 @@ red "仅支持1.10.7内核可用" && exit
 fi
 }
 
-tgsbshow(){
-echo
-yellow "1：重置/设置Telegram机器人的Token、用户ID"
-yellow "0：返回上层"
-readp "请选择【0-1】：" menu
-if [ "$menu" = "1" ]; then
-rm -rf /etc/s-box/sbtg.sh
-readp "输入Telegram机器人Token: " token
-telegram_token=$token
-readp "输入Telegram机器人用户ID: " userid
-telegram_id=$userid
-echo '#!/bin/bash
-export LANG=en_US.UTF-8
-sbnh=$(/etc/s-box/sing-box version 2>/dev/null | awk '/version/{print $NF}' 2>/dev/null | cut -d '.' -f 1,2)
-m1=$(cat /etc/s-box/vl_reality.txt 2>/dev/null)
-m5=$(cat /etc/s-box/hy2.txt 2>/dev/null)
-m11=$(cat /etc/s-box/jhsub.txt 2>/dev/null)
-message_text_m1=$(echo "$m1")
-message_text_m5=$(echo "$m5")
-message_text_m11=$(echo "$m11")
-MODE=HTML
-URL="https://api.telegram.org/bottelegram_token/sendMessage"
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 Vless-reality-vision 分享链接 】：支持v2rayng、nekobox "$'"'"'\n\n'"'"'"${message_text_m1}")
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 Hysteria-2 分享链接 】：支持v2rayng、nekobox "$'"'"'\n\n'"'"'"${message_text_m5}")
-res=$(timeout 20s curl -s -X POST $URL -d chat_id=telegram_id  -d parse_mode=${MODE} --data-urlencode "text=🚀【 聚合节点 】：支持nekobox "$'"'"'\n\n'"'"'"${message_text_m11}")
-
-if [ $? == 124 ];then
-echo TG_api请求超时,请检查网络是否重启完成并是否能够访问TG
-fi
-resSuccess=$(echo "$res" | jq -r ".ok")
-if [[ $resSuccess = "true" ]]; then
-echo "TG推送成功";
-else
-echo "TG推送失败，请检查TG机器人Token和ID";
-fi
-' > /etc/s-box/sbtg.sh
-sed -i "s/telegram_token/$telegram_token/g" /etc/s-box/sbtg.sh
-sed -i "s/telegram_id/$telegram_id/g" /etc/s-box/sbtg.sh
-green "设置完成！请确保TG机器人已处于激活状态！"
-tgnotice
-else
-changeserv
-fi
-}
-
-tgnotice(){
-if [[ -f /etc/s-box/sbtg.sh ]]; then
-green "请稍等5秒，TG机器人准备推送……"
-sbshare > /dev/null 2>&1
-bash /etc/s-box/sbtg.sh
-else
-yellow "未设置TG通知功能"
-fi
-exit
-}
-
 changeserv(){
 sbactive
 echo
 green "Sing-box配置变更选择如下:"
-readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：更换Reality域名伪装地址\n3：更换全协议UUID(密码)\n4：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n5：设置Telegram推送节点通知\n6：设置Gitlab订阅分享链接\n7：设置本地IP订阅分享链接\n0：返回上层\n请选择【0-7】：" menu
+readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：更换Reality域名伪装地址\n3：更换全协议UUID(密码)\n4：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n5：设置本地IP订阅分享链接\n0：返回上层\n请选择【0-5】：" menu
 if [ "$menu" = "1" ];then
 setcert
 elif [ "$menu" = "2" ];then
@@ -919,10 +861,6 @@ changeuuid
 elif [ "$menu" = "4" ];then
 changeip
 elif [ "$menu" = "5" ];then
-tgsbshow
-elif [ "$menu" = "6" ];then
-gitlabsub
-elif [ "$menu" = "7" ];then
 ipsub
 else 
 sb
@@ -1021,94 +959,6 @@ rm -f "$tmpct"
 fi
 sbshare > /dev/null 2>&1
 sleep 1 && green "本地IP订阅链接已更新完成" && sleep 3 && sb
-}
-
-gitlabsub(){
-echo
-green "请确保Gitlab官网上已建立项目，已开启推送功能，已获取访问令牌"
-yellow "1：重置/设置Gitlab订阅链接"
-yellow "0：返回上层"
-readp "请选择【0-1】：" menu
-if [ "$menu" = "1" ]; then
-cd /etc/s-box
-readp "输入登录邮箱: " email
-readp "输入访问令牌: " token
-readp "输入用户名: " userid
-readp "输入项目名: " project
-echo
-green "多台VPS共用一个令牌及项目名，可创建多个分支订阅链接"
-green "回车跳过表示不新建，仅使用主分支main订阅链接(首台VPS建议回车跳过)"
-readp "新建分支名称: " gitlabml
-echo
-if [[ -z "$gitlabml" ]]; then
-gitlab_ml=''
-git_sk=main
-rm -rf /etc/s-box/gitlab_ml_ml
-else
-gitlab_ml=":${gitlabml}"
-git_sk="${gitlabml}"
-echo "${gitlab_ml}" > /etc/s-box/gitlab_ml_ml
-fi
-echo "$token" > /etc/s-box/gitlabtoken.txt
-rm -rf /etc/s-box/.git
-git init >/dev/null 2>&1
-git add jhsub.txt >/dev/null 2>&1
-git config --global user.email "${email}" >/dev/null 2>&1
-git config --global user.name "${userid}" >/dev/null 2>&1
-git commit -m "commit_add_$(date +"%F %T")" >/dev/null 2>&1
-branches=$(git branch)
-if [[ $branches == *master* ]]; then
-git branch -m master main >/dev/null 2>&1
-fi
-git remote add origin https://${token}@gitlab.com/${userid}/${project}.git >/dev/null 2>&1
-if [[ $(ls -a | grep '^\.git$') ]]; then
-cat > /etc/s-box/gitpush.sh <<EOF
-#!/usr/bin/expect
-spawn bash -c "git push -f origin main${gitlab_ml}"
-expect "Password for 'https://$(cat /etc/s-box/gitlabtoken.txt 2>/dev/null)@gitlab.com':"
-send "$(cat /etc/s-box/gitlabtoken.txt 2>/dev/null)\r"
-interact
-EOF
-chmod +x gitpush.sh
-./gitpush.sh "git push -f origin main${gitlab_ml}" cat /etc/s-box/gitlabtoken.txt >/dev/null 2>&1
-echo "https://gitlab.com/api/v4/projects/${userid}%2F${project}/repository/files/jhsub.txt/raw?ref=${git_sk}&private_token=${token}" > /etc/s-box/jh_sub_gitlab.txt
-clsbshow
-else
-yellow "设置Gitlab订阅链接失败，请反馈"
-fi
-cd
-else
-changeserv
-fi
-}
-
-gitlabsubgo(){
-cd /etc/s-box
-if [[ $(ls -a | grep '^\.git$') ]]; then
-if [ -f /etc/s-box/gitlab_ml_ml ]; then
-gitlab_ml=$(cat /etc/s-box/gitlab_ml_ml)
-fi
-git rm --cached jhsub.txt >/dev/null 2>&1
-git rm --cached sbox.json clmi.yaml >/dev/null 2>&1
-git commit -m "commit_rm_$(date +"%F %T")" >/dev/null 2>&1
-git add jhsub.txt >/dev/null 2>&1
-git commit -m "commit_add_$(date +"%F %T")" >/dev/null 2>&1
-chmod +x gitpush.sh
-./gitpush.sh "git push -f origin main${gitlab_ml}" cat /etc/s-box/gitlabtoken.txt >/dev/null 2>&1
-clsbshow
-else
-yellow "未设置Gitlab订阅链接"
-fi
-cd
-}
-
-clsbshow(){
-green "当前聚合节点配置已更新并推送"
-green "订阅链接如下："
-blue "$(cat /etc/s-box/jh_sub_gitlab.txt 2>/dev/null)"
-echo
-yellow "可以在网页上输入订阅链接查看配置内容，如果无配置内容，请自检Gitlab相关设置并重置"
-echo
 }
 
 restartsb(){
@@ -1312,22 +1162,7 @@ echo
 
 clash_sb_share(){
 sbactive
-echo
-yellow "1：刷新并查看分享链接、二维码、聚合节点、Gitlab订阅链接"
-yellow "2：推送最新节点配置信息(选项1)到Telegram通知"
-yellow "0：返回上层"
-readp "请选择【0-2】：" menu
-if [ "$menu" = "1" ]; then
 sbshare
-white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-red "Gitlab聚合订阅链接如下："
-gitlabsubgo
-white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-elif [ "$menu" = "2" ]; then
-tgnotice
-else
-sb
-fi
 }
 
 bbr(){
@@ -1395,7 +1230,7 @@ green " 5. 关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"
 green " 7. 更新/切换/指定 Sing-box 内核版本"
 white "----------------------------------------------------------------------------------"
-green " 8. 刷新并查看节点 【分享链接/聚合订阅/Gitlab订阅/推送TG通知】"
+green " 8. 刷新并查看节点 【分享链接/聚合订阅/本地IP订阅】"
 green " 9. 查看 Sing-box 运行日志"
 green "10. 一键原版BBR+FQ加速"
 green "11. 填写Hysteria2证书路径"
