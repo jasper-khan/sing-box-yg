@@ -195,6 +195,15 @@ if ($promoHits) {
   $errors += "upstream promo/branding reappeared: $($promoHits -join ', ')"
 }
 
+# 15) the vless share link must keep the fork's TLS fingerprint default (firefox),
+#     not upstream's chrome.
+if ($text -notmatch 'fp=firefox') {
+  $errors += 'vless share link lost the fp=firefox default'
+}
+if ($text -match 'fp=chrome') {
+  $errors += 'vless share link fell back to upstream fp=chrome'
+}
+
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1
