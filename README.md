@@ -16,7 +16,7 @@
 
 * 支持纯IPV6、纯IPV4、双栈VPS，支持amd与arm架构，支持alpine系统，推荐使用最新的Ubuntu系统
 
-* 小白简单模式：安装时自动生成自签证书，无需域名证书、也不再询问证书选项，回车三次就安装完成，复制、扫描你要的节点配置
+* 小白简单模式：安装时自动生成自签证书，无需域名证书、也不再询问证书选项，回车两次就安装完成，复制、扫描你要的节点配置
 
 #### 相关说明及注意点请查看[甬哥博客说明与Sing-box视频教程](https://ygkkk.blogspot.com/2023/10/sing-box-yg.html)
 
@@ -55,9 +55,17 @@
 * vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时提示处直接回车即可；已安装的可用菜单 `3` → `2` 更换。
 * 自己申请的 Hysteria2 证书：用菜单 `3` → `1`（或主菜单 `11`）填写证书文件路径与私钥文件路径，脚本会校验文件存在、写入配置并重启服务。不填就继续用自签证书。
 * 脚本自更新、版本检查与上面的安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
-* 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认伪装域名、服务端模板结构、自更新 URL、协议范围、以及"不再按行号改配置 / 不再生成客户端配置"这些不变量都还在。
+* 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认伪装域名、服务端模板结构、自更新 URL、协议范围、“不再按行号改配置 / 不再生成客户端配置”、“GitLab/Telegram 不得回流”、“变更配置菜单保持 5 项”与“README 快捷命令编号与菜单一致”这些不变量都还在。
 * 服务端配置另可用 `tools/render-configs.ps1` 渲染校验（预期两个模板都只输出 `vless,hysteria2`）。
 * 从旧的多协议版本升级：必须**先卸载再重装**。菜单 2 卸载后会删除 `/usr/bin/sb`，请重新执行上面的安装命令并选菜单 1。只点菜单 6"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`；旧配置里残留的其它协议 inbound 不会被清理；卸载流程保留了旧版 Argo/WARP/WARP-plus 服务、进程与定时任务的清理。
+
+### 当前菜单结构
+
+主菜单：`1 一键安装` / `2 卸载` / `3 变更配置` / `4 更改主端口与多端口跳跃` / `5 关闭或重启` / `6 更新脚本` / `7 更新或切换内核` / `8 刷新并查看节点` / `9 运行日志` / `10 BBR+FQ` / `11 填写 Hysteria2 证书路径` / `12 更换 IP 与 IPV4/IPV6 输出` / `13 脚本使用说明书` / `0 退出`。
+
+变更配置（主菜单 3）：`1 证书路径` / `2 Reality 伪装域名` / `3 UUID` / `4 IPV4/IPV6 代理优先级` / `5 本地 IP 订阅` / `0 返回`。
+
+本地 IP 订阅（变更配置 5）：`1 重置安装` / `2 更换路径密码` / `3 更换端口` / `4 卸载` / `0 返回`。
 
 ### 同步上游更新
 
@@ -74,10 +82,10 @@ bash <(wget -qO- https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/
 bash <(curl -Ls https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/sb.sh)
 ```
 
-一键快捷命令实现本地IP订阅：```printf '3\n6\n1\n订阅密码' | sb```
+一键快捷命令实现本地IP订阅：```printf '3\n5\n1\n订阅密码' | sb```
 
 
-### Sing-box-yg脚本界面预览图（注：相关参数随意填写，仅供围观）
+### Sing-box-yg脚本界面预览图（注：上游多协议版界面，本 fork 菜单更少，仅供围观）
 
 ![1d5425c093618313888fe41a55f493f](https://github.com/user-attachments/assets/2b4b04a6-2de4-499a-afa1-ed78bccc50a8)
 

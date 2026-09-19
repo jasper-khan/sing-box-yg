@@ -546,18 +546,17 @@ hyps=
 fi
 hy2_certpath=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path' 2>/dev/null)
 hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
+hy2_name=$(openssl x509 -in "$hy2_certpath" -noout -text 2>/dev/null | grep -oE 'DNS:[^, ]+' | head -n 1 | sed 's/DNS://')
+hy2_name=${hy2_name:-$(openssl x509 -in "$hy2_certpath" -noout -subject 2>/dev/null | sed 's/.*CN *= *//')}
 if [[ "$hy2_sniname" = */etc/s-box/private.key ]]; then
 SHA256=$(openssl x509 -in "$hy2_certpath" -outform DER 2>/dev/null | sha256sum | awk '{print $1}')
 echo "$SHA256" > /etc/s-box/SHA256.txt
 SHA256=$(cat /etc/s-box/SHA256.txt)
-hy2_name=www.bing.com
 sb_hy2_ip=$server_ip
 else
-hy2_name=$(openssl x509 -in "$hy2_certpath" -noout -text 2>/dev/null | grep -oE 'DNS:[^, ]+' | head -n 1 | sed 's/DNS://')
-hy2_name=${hy2_name:-$(openssl x509 -in "$hy2_certpath" -noout -subject 2>/dev/null | sed 's/.*CN *= *//')}
-hy2_name=${hy2_name:-$server_ip}
-sb_hy2_ip=$hy2_name
+sb_hy2_ip=${hy2_name:-$server_ip}
 fi
+hy2_name=${hy2_name:-www.bing.com}
 }
 
 resvless(){
@@ -579,7 +578,7 @@ echo
 reshy2(){
 echo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=0&allowInsecure=0$hyps&sni=$hy2_name&pinSHA256=$SHA256#hy2-$hostname"
+hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=0&allowInsecure=0$hyps&sni=$hy2_name${SHA256:+&pinSHA256=$SHA256}#hy2-$hostname"
 echo "$hy2_link" > /etc/s-box/hy2.txt
 red "🚀【 Hysteria-2 】节点信息如下：" && sleep 2
 echo
@@ -1224,7 +1223,7 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 green " 1. 一键安装 Sing-box" 
 green " 2. 删除卸载 Sing-box"
 white "----------------------------------------------------------------------------------"
-green " 3. 变更配置 【证书/UUID/IP优先/TG通知/订阅】"
+green " 3. 变更配置 【证书/域名/UUID/IP优先/订阅】"
 green " 4. 更改主端口/添加多端口跳跃复用" 
 green " 5. 关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"

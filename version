@@ -1,11 +1,11 @@
-v26.4.12-fork.1更新内容：
+v26.4.12-fork.2更新内容：
 
 注意：从旧的多协议版本升级，必须先卸载再重装；只点菜单6更新脚本不会清理旧配置中的其它协议 inbound。
 
 更新内容：
-1、本 fork 仅保留 vless-reality 与 hysteria2 两个协议，删除 vmess-ws/Argo、tuic、anytls
-2、删除 WARP 与依赖 WARP 的域名分流，仅保留 direct/block 出站模板
-3、不再生成 sbox.json/clmi.yaml 客户端配置，订阅只输出双协议分享链接与聚合订阅 jhsub.txt
-4、vless-reality 默认 SNI 固定为 foothill.edu；端口跳跃只针对 hysteria2
+1、删除 Acme 自动申请证书：安装时只生成自签证书，自带证书用主菜单 11（变更配置 1）填写证书与私钥路径
+2、删除 GitLab 订阅发布与 Telegram 推送，依赖里不再安装 git、expect
+3、变更配置菜单收敛为 5 项：证书路径 / Reality 域名 / UUID / IP 优先级 / 本地 IP 订阅
+4、Hysteria2 分享链接按证书自动适配：自签 = SNI www.bing.com + 服务器IP + pinSHA256；自带证书 = 读取证书域名，不再输出空的 pinSHA256 参数
 
 详见：https://github.com/jasper-khan/sing-box-yg

@@ -143,7 +143,7 @@ if ($text -notmatch 'Vless-reality\uFF1ATCP \$port_vl_re' -or
 }
 # 9) GitLab publishing and Telegram push must stay removed, and "变更配置"
 #    must stay at the 5 remaining interaction points.
-$pushHits = [regex]::Matches($text, '(?i)gitlab|telegram|sbtg\.sh|gitpush\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique
+$pushHits = [regex]::Matches($text, '(?i)gitlab|telegram|TG通知|电报|sbtg\.sh|gitpush\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($pushHits) {
   $errors += "gitlab/telegram feature reappeared: $($pushHits -join ', ')"
 }
@@ -153,6 +153,21 @@ if (-not $cs.Success) {
 } else {
   foreach ($fn in 'setcert', 'changeym', 'changeuuid', 'changeip', 'ipsub') {
     if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
+  }
+}
+
+# 10) README quick command must match the current config-change menu numbers.
+$readmePath = Join-Path $PSScriptRoot 'README.md'
+if ($cs.Success -and (Test-Path $readmePath)) {
+  $readme = [System.IO.File]::ReadAllText($readmePath, [System.Text.Encoding]::UTF8)
+  $ipsubIdx = $null
+  foreach ($m in [regex]::Matches($cs.Value, '\[ "\$menu" = "(\d)" \];then\r?\n([a-z]+)')) {
+    if ($m.Groups[2].Value -eq 'ipsub') { $ipsubIdx = $m.Groups[1].Value }
+  }
+  if (-not $ipsubIdx) {
+    $errors += 'ipsub entry not found in the config-change menu'
+  } elseif ($readme -notmatch ("printf '3\\n" + $ipsubIdx + "\\n1\\n")) {
+    $errors += "README quick command is stale: expect printf '3\\n$ipsubIdx\\n1\\n..."
   }
 }
 
