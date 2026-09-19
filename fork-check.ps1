@@ -151,23 +151,8 @@ $cs = [regex]::Match($text, '(?ms)^changeserv\(\)\{.*?^\}')
 if (-not $cs.Success) {
   $errors += 'changeserv menu not found'
 } else {
-  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changeip', 'ipsub') {
+  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changeip') {
     if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
-  }
-}
-
-# 10) README quick command must match the current config-change menu numbers.
-$readmePath = Join-Path $PSScriptRoot 'README.md'
-if ($cs.Success -and (Test-Path $readmePath)) {
-  $readme = [System.IO.File]::ReadAllText($readmePath, [System.Text.Encoding]::UTF8)
-  $ipsubIdx = $null
-  foreach ($m in [regex]::Matches($cs.Value, '\[ "\$menu" = "(\d)" \];then\r?\n([a-z]+)')) {
-    if ($m.Groups[2].Value -eq 'ipsub') { $ipsubIdx = $m.Groups[1].Value }
-  }
-  if (-not $ipsubIdx) {
-    $errors += 'ipsub entry not found in the config-change menu'
-  } elseif ($readme -notmatch ("printf '3\\n" + $ipsubIdx + "\\n1\\n")) {
-    $errors += "README quick command is stale: expect printf '3\\n$ipsubIdx\\n1\\n..."
   }
 }
 
@@ -181,6 +166,12 @@ if ($backAgain.Count) {
 # 12) share links must use the configurable node name (not the raw hostname).
 if ($text -notmatch '#vl-reality-\$sbnode' -or $text -notmatch '#hy2-\$sbnode') {
   $errors += 'share links no longer use the configurable node name'
+}
+
+# 13) the local-IP subscription server (busybox httpd) must stay removed.
+$subHits = [regex]::Matches($text, '(?i)\bipsub\b|subport\.log|subtoken\.log|busybox[^\r\n]*httpd|jhsub\.txt') | ForEach-Object { $_.Value } | Sort-Object -Unique
+if ($subHits) {
+  $errors += "local-IP subscription feature reappeared: $($subHits -join ', ')"
 }
 
 if ($errors.Count) {

@@ -893,7 +893,7 @@ changeserv(){
 sbactive
 echo
 green "Sing-box配置变更选择如下:"
-readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n6：设置本地IP订阅分享链接\n0：返回上层\n请选择【0-6】：" menu
+readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n0：返回上层\n请选择【0-5】：" menu
 if [ "$menu" = "1" ];then
 setcert
 elif [ "$menu" = "2" ];then
@@ -904,105 +904,9 @@ elif [ "$menu" = "4" ];then
 changeuuid
 elif [ "$menu" = "5" ];then
 changeip
-elif [ "$menu" = "6" ];then
-ipsub
 else 
 sb
 fi
-}
-
-ipsub(){
-subtokenipsub(){
-echo
-readp "输入订阅链接路径密码（回车表示使用当前UUID）：" menu
-if [ -z "$menu" ]; then
-subtoken="$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].users[0].uuid')"
-else
-subtoken="$menu"
-fi
-if [[ ! $subtoken =~ ^[A-Za-z0-9._-]+$ || $subtoken == *..* ]]; then
-red "订阅链接路径密码只能使用字母、数字、点、下划线和减号，且不能包含 .." && return 1
-fi
-oldsubtoken=$(cat /etc/s-box/subtoken.log 2>/dev/null)
-[[ $oldsubtoken =~ ^[A-Za-z0-9._-]+$ && $oldsubtoken != *..* ]] && rm -rf /root/websbox/"$oldsubtoken"
-printf '%s\n' "$subtoken" > /etc/s-box/subtoken.log
-green "订阅链接路径密码：$(cat /etc/s-box/subtoken.log 2>/dev/null)"
-}
-subportipsub(){
-echo
-readp "输入未被占用且可用的订阅链接端口（回车表示随机端口）：" menu
-if [ -z "$menu" ]; then
-subport=$(shuf -i 10000-65535 -n 1)
-else
-subport="$menu"
-if [[ ! $subport =~ ^[0-9]+$ || $((10#$subport)) -lt 1000 || $((10#$subport)) -gt 65535 ]]; then
-red "订阅链接端口必须是 1000-65535 的数字" && return 1
-fi
-subport=$((10#$subport))
-fi
-echo $subport > /etc/s-box/subport.log
-green "订阅链接端口：$(cat /etc/s-box/subport.log 2>/dev/null)"
-}
-echo
-yellow "1：重置安装本地IP订阅链接"
-yellow "2：更换订阅链接路径密码"
-yellow "3：更换订阅链接端口"
-yellow "4：卸载本地IP订阅链接"
-yellow "0：返回上层"
-readp "请选择【0-4】：" menu
-if [ "$menu" = "1" ]; then
-subtokenipsub && subportipsub || { sleep 2; ipsub; }
-elif [ "$menu" = "2" ];then
-subtokenipsub || { sleep 2; ipsub; }
-elif [ "$menu" = "3" ];then
-subportipsub
-elif [ "$menu" = "4" ];then
-kill -15 $(pgrep -f 'websbox' 2>/dev/null) >/dev/null 2>&1
-tmpct=$(mktemp) || { red "创建临时文件失败"; return 1; }
-crontab -l 2>/dev/null > "$tmpct"
-sed -i '/websbox/d' "$tmpct"
-crontab "$tmpct" >/dev/null 2>&1
-rm -f "$tmpct"
-rm -rf /root/websbox
-rm -rf /etc/local.d/alpinesub.start
-green "本地IP订阅链接已卸载完成" && sleep 3 && exit
-else
-changeserv
-fi
-echo
-green "请稍后…………"
-kill -15 $(pgrep -f 'websbox' 2>/dev/null) >/dev/null 2>&1
-subtoken=$(cat /etc/s-box/subtoken.log 2>/dev/null)
-if [[ ! $subtoken =~ ^[A-Za-z0-9._-]+$ || $subtoken == *..* ]]; then
-red "订阅链接路径密码无效，请重新设置后再试" && sleep 3 && exit
-fi
-mkdir -p /root/websbox/"$subtoken"
-rm -f /root/websbox/"$subtoken"/clmi.yaml /root/websbox/"$subtoken"/sbox.json
-ln -sf /etc/s-box/jhsub.txt /root/websbox/"$subtoken"/jhsub.txt
-if command -v apk >/dev/null 2>&1; then
-busybox-extras httpd -f -p "$(cat /etc/s-box/subport.log 2>/dev/null)" -h /root/websbox > /dev/null 2>&1 &
-else
-busybox httpd -f -p "$(cat /etc/s-box/subport.log 2>/dev/null)" -h /root/websbox > /dev/null 2>&1 &
-fi
-sleep 5
-if command -v apk >/dev/null 2>&1; then
-cat > /etc/local.d/alpinesub.start <<'EOF'
-#!/bin/bash
-sleep 10
-busybox-extras httpd -f -p $(cat /etc/s-box/subport.log 2>/dev/null) -h /root/websbox > /dev/null 2>&1 &
-EOF
-chmod +x /etc/local.d/alpinesub.start
-rc-update add local default >/dev/null 2>&1
-else
-tmpct=$(mktemp) || { red "创建临时文件失败"; return 1; }
-crontab -l 2>/dev/null > "$tmpct"
-sed -i '/websbox/d' "$tmpct"
-echo '@reboot sleep 10 && /bin/bash -c "busybox httpd -f -p $(cat /etc/s-box/subport.log 2>/dev/null) -h /root/websbox > /dev/null 2>&1 &"' >> "$tmpct"
-crontab "$tmpct" >/dev/null 2>&1
-rm -f "$tmpct"
-fi
-sbshare > /dev/null 2>&1
-sleep 1 && green "本地IP订阅链接已更新完成" && sleep 3 && sb
 }
 
 restartsb(){
@@ -1193,7 +1097,6 @@ result_vl_hy2 && resvless && reshy2
 cat /etc/s-box/vl_reality.txt 2>/dev/null >> /etc/s-box/jhdy.txt
 cat /etc/s-box/hy2.txt 2>/dev/null >> /etc/s-box/jhdy.txt
 v2sub=$(cat /etc/s-box/jhdy.txt 2>/dev/null)
-echo "$v2sub" > /etc/s-box/jhsub.txt
 echo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 red "🚀【 聚合节点 】节点信息如下：" && sleep 2
@@ -1225,15 +1128,6 @@ hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_p
 echo -e "Sing-box节点关键信息如下："
 echo -e "🚀【 Vless-reality 】${yellow}端口:$vl_port  Reality域名证书伪装地址：$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')${plain}"
 echo -e "🚀【  Hysteria-2   】${yellow}端口:$hy2_port  证书形式:$hy2_zs  转发多端口: $hy2zfport${plain}"
-if [ -s /etc/s-box/subport.log ]; then
-showsubport=$(cat /etc/s-box/subport.log)
-if ps -ef 2>/dev/null | grep "$showsubport" | grep -v grep >/dev/null; then
-showsubtoken=$(cat /etc/s-box/subtoken.log 2>/dev/null)
-subip=$(cat /etc/s-box/server_ip.log 2>/dev/null)
-suburl="$subip:$showsubport/$showsubtoken"
-echo "聚合协议本地IP订阅地址：http://$suburl/jhsub.txt"
-fi
-fi
 echo "------------------------------------------------------------------------------------"
 }
 

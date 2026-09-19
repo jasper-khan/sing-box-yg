@@ -50,13 +50,14 @@
 * 只有两个协议：vless-reality 与 hysteria2。vmess-ws/Argo、tuic5、anytls 已从脚本中删除（服务端 inbound、客户端配置、订阅分享、菜单、端口、卸载逻辑均不含这三种协议）。
 * 安装时不再询问或关闭服务器防火墙；端口确定后直接提示 VPS 防火墙/云安全组需要放行的 VLESS TCP 与 Hysteria2 UDP 入站端口。
 * WARP 相关功能同样已删除：wireguard 出站、WARP-plus-Socks5、CFwarp 管理入口，以及依赖 WARP 通道的"三通道域名分流"。服务端模板现在只有 `direct`（sb10 另有 `block`）。
-* 不再生成客户端配置文件：原 `sbox.json`（sing-box 客户端）与 `clmi.yaml`（Mihomo/Clash）的生成、分段推送、软链与 GitLab 发布已全部删除。订阅只提供两个协议的分享链接与聚合订阅 `jhsub.txt`。
-* GitLab 订阅发布与 Telegram 推送已删除：脚本里不再有这两项功能，“变更配置”菜单只剩 6 项（证书路径 / 节点名称 / Reality 域名 / UUID / IP 优先级 / 本地 IP 订阅），依赖里也不再安装 `git`、`expect`。
+* 不再生成客户端配置文件：原 `sbox.json`（sing-box 客户端）与 `clmi.yaml`（Mihomo/Clash）的生成、分段推送、软链与 GitLab 发布已全部删除。只提供两个协议的分享链接（菜单 8 打印、复制或扫码）。
+* 本地IP订阅（busybox httpd 订阅服务）已删除：不再有 `subport.log` / `subtoken.log` / `/root/websbox`，也不会占额外端口（卸载流程仍会清理旧版留下的 websbox 进程与目录）。
+* GitLab 订阅发布与 Telegram 推送已删除：脚本里不再有这两项功能，“变更配置”菜单只剩 5 项（证书路径 / 节点名称 / Reality 域名 / UUID / IP 优先级），依赖里也不再安装 `git`、`expect`。
 * 节点名称（分享链接末尾的名字）：安装时会问一次（回车 = 默认主机名），装完可用菜单 `3` → `2` 随时修改（输入 `0` 恢复默认主机名），改完自动刷新分享链接与本地订阅。
 * vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时提示处直接回车即可；已安装的可用菜单 `3` → `2` 更换。
 * 自己申请的 Hysteria2 证书：用菜单 `3` → `1`（或主菜单 `11`）填写证书文件路径与私钥文件路径，脚本会校验文件存在、写入配置并重启服务。不填就继续用自签证书。
 * 脚本自更新、版本检查与上面的安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
-* 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认伪装域名、服务端模板结构、自更新 URL、协议范围、“不再按行号改配置 / 不再生成客户端配置”、“GitLab/Telegram 不得回流”、“变更配置菜单保持 5 项”与“README 快捷命令编号与菜单一致”这些不变量都还在。
+* 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示默认伪装域名、服务端模板结构、自更新 URL、协议范围、“不再按行号改配置 / 不再生成客户端配置”、“GitLab/Telegram 不得回流”、“本地IP订阅服务不得回流”与“变更配置菜单保持 5 项”这些不变量都还在。
 * 服务端配置另可用 `tools/render-configs.ps1` 渲染校验（预期两个模板都只输出 `vless,hysteria2`）。
 * 从旧的多协议版本升级：必须**先卸载再重装**。菜单 2 卸载后会删除 `/usr/bin/sb`，请重新执行上面的安装命令并选菜单 1。只点菜单 6"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`；旧配置里残留的其它协议 inbound 不会被清理；卸载流程保留了旧版 Argo/WARP/WARP-plus 服务、进程与定时任务的清理。
 
@@ -64,14 +65,12 @@
 
 主菜单：`1 一键安装` / `2 卸载` / `3 变更配置` / `4 更改主端口与多端口跳跃` / `5 关闭或重启` / `6 更新脚本` / `7 更新或切换内核` / `8 刷新并查看节点` / `9 运行日志` / `10 BBR+FQ` / `11 填写 Hysteria2 证书路径` / `12 更换 IP 与 IPV4/IPV6 输出` / `13 脚本使用说明书` / `0 退出`。
 
-变更配置（主菜单 3）：`1 证书路径` / `2 节点名称` / `3 Reality 伪装域名` / `4 UUID` / `5 IPV4/IPV6 代理优先级` / `6 本地 IP 订阅` / `0 返回`。
-
-本地 IP 订阅（变更配置 6）：`1 重置安装` / `2 更换路径密码` / `3 更换端口` / `4 卸载` / `0 返回`。
+变更配置（主菜单 3）：`1 证书路径` / `2 节点名称` / `3 Reality 伪装域名` / `4 UUID` / `5 IPV4/IPV6 代理优先级` / `0 返回`。
 
 ### 同步上游更新
 
 1. `git fetch upstream`
-2. `git merge upstream/main`：不要使用 `-X ours`。冲突时手工解决，明确保留本 fork 的删除边界（vmess/Argo、tuic、anytls、WARP、域名分流、GitLab 订阅、Telegram 推送相关功能不得重新引入，删除处保持删除）；接受 vless-reality、hysteria2 路径上的上游改动，并保留 `foothill.edu` 默认值与指向本 fork 的自更新 URL。
+2. `git merge upstream/main`：不要使用 `-X ours`。冲突时手工解决，明确保留本 fork 的删除边界（vmess/Argo、tuic、anytls、WARP、域名分流、GitLab 订阅、Telegram 推送、本地IP订阅服务相关功能不得重新引入，删除处保持删除）；接受 vless-reality、hysteria2 路径上的上游改动，并保留 `foothill.edu` 默认值与指向本 fork 的自更新 URL。
 3. 合并后依次运行：`bash -n sb.sh`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/render-configs.ps1`。
 4. 服务端配置的读写已全部改为按 jq 字段路径（`.inbounds[0]` = vless-reality、`.inbounds[1]` = hysteria2），上游增删字段不再影响这些功能；脚本中已不存在按行号改写配置的 sed，`fork-check.ps1` 会守住这一点。
 
@@ -82,8 +81,6 @@ bash <(wget -qO- https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/
 ```
 bash <(curl -Ls https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/sb.sh)
 ```
-
-一键快捷命令实现本地IP订阅：```printf '3\n6\n1\n订阅密码' | sb```
 
 
 ### Sing-box-yg脚本界面预览图（注：上游多协议版界面，本 fork 菜单更少，仅供围观）
