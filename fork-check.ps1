@@ -163,9 +163,14 @@ if ($backAgain.Count) {
   $errors += "deleted upstream files came back: $($backAgain -join ', ')"
 }
 
-# 12) share links must use the configurable node name (not the raw hostname).
-if ($text -notmatch '#vl-reality-\$sbnode' -or $text -notmatch '#hy2-\$sbnode') {
-  $errors += 'share links no longer use the configurable node name'
+# 12) share links must show exactly the configurable node name: no hostname and
+#     no hard-coded "vl-reality-"/"hy2-" prefix in front of it.
+$nodeFrag = [regex]::Matches($text, '#\$sbnode"').Count
+if ($nodeFrag -ne 2) {
+  $errors += "share links no longer use the configurable node name (found $nodeFrag of 2)"
+}
+if ($text -match '#(?:vl-reality|hy2)-\$sbnode') {
+  $errors += 'share links re-added a hard-coded protocol prefix in front of the node name'
 }
 
 # 13) the local-IP subscription server (busybox httpd) must stay removed.

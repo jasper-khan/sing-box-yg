@@ -1,13 +1,14 @@
-v26.4.12-fork.4更新内容：
+v26.4.12-fork.5更新内容：
 
 注意：从旧的多协议版本升级，必须先卸载再重装；只点菜单6更新脚本不会清理旧配置中的其它协议 inbound。
 
 更新内容：
-1、删除本地IP订阅服务（busybox httpd + /root/websbox + subport/subtoken），不再占用额外端口，也不再生成 jhsub.txt；节点用菜单 8 复制或扫码
-2、新增节点名称设置：安装时可直接填写，装完可用“变更配置 → 2 节点名称”修改（回车保持当前，输入 0 恢复默认主机名）
-3、删除 Acme 自动申请证书：安装时只生成自签证书，自带证书用主菜单 11（变更配置 1）填写证书与私钥路径
-4、删除 GitLab 订阅发布与 Telegram 推送，依赖里不再安装 git、expect
-5、变更配置菜单（共 5 项）：证书路径 / 节点名称 / Reality 域名 / UUID / IP 优先级
-6、Hysteria2 分享链接按证书自动适配：自签 = SNI www.bing.com + 服务器IP + pinSHA256；自带证书 = 读取证书域名，不再输出空的 pinSHA256 参数
+1、节点名称修正：分享链接末尾不再自动加 vl-reality-/hy2- 前缀，客户端里显示的就是你设置的名字（两条节点同名，靠协议与端口区分）
+2、删除本地IP订阅服务（busybox httpd + /root/websbox + subport/subtoken），不再占用额外端口，也不再生成 jhsub.txt；节点用菜单 8 复制或扫码
+3、新增节点名称设置：安装时可直接填写，装完可用“变更配置 → 2 节点名称”修改（回车保持当前，输入 0 恢复默认主机名）
+4、删除 Acme 自动申请证书：安装时只生成自签证书，自带证书用主菜单 11（变更配置 1）填写证书与私钥路径
+5、删除 GitLab 订阅发布与 Telegram 推送，依赖里不再安装 git、expect
+6、变更配置菜单（共 5 项）：证书路径 / 节点名称 / Reality 域名 / UUID / IP 优先级
+7、Hysteria2 分享链接按证书自动适配：自签 = SNI www.bing.com + 服务器IP + pinSHA256；自带证书 = 读取证书域名，不再输出空的 pinSHA256 参数
 
 详见：https://github.com/jasper-khan/sing-box-yg

@@ -578,7 +578,7 @@ hy2_name=${hy2_name:-www.bing.com}
 resvless(){
 echo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-vl_link="vless://$uuid@$server_ip:$vl_port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$vl_name&fp=chrome&pbk=$public_key&sid=$short_id&type=tcp&headerType=none#vl-reality-$sbnode"
+vl_link="vless://$uuid@$server_ip:$vl_port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$vl_name&fp=chrome&pbk=$public_key&sid=$short_id&type=tcp&headerType=none#$sbnode"
 echo "$vl_link" > /etc/s-box/vl_reality.txt
 red "🚀【 vless-reality-vision 】节点信息如下：" && sleep 2
 echo
@@ -594,7 +594,7 @@ echo
 reshy2(){
 echo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=0&allowInsecure=0$hyps&sni=$hy2_name${SHA256:+&pinSHA256=$SHA256}#hy2-$sbnode"
+hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=0&allowInsecure=0$hyps&sni=$hy2_name${SHA256:+&pinSHA256=$SHA256}#$sbnode"
 echo "$hy2_link" > /etc/s-box/hy2.txt
 red "🚀【 Hysteria-2 】节点信息如下：" && sleep 2
 echo
