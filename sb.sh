@@ -959,9 +959,6 @@ uncronsb(){
 tmpct=$(mktemp) || { red "创建临时文件失败"; return 1; }
 crontab -l 2>/dev/null > "$tmpct"
 sed -i '/sing-box/d' "$tmpct"
-sed -i '/sbwpph/d' "$tmpct"
-sed -i '/websbox/d' "$tmpct"
-sed -i '/cloudflared/d' "$tmpct"
 crontab "$tmpct" >/dev/null 2>&1
 rm -f "$tmpct"
 }
@@ -1050,24 +1047,15 @@ fi
 
 unins(){
 if command -v apk >/dev/null 2>&1; then
-for svc in sing-box argo; do
-rc-service "$svc" stop >/dev/null 2>&1
-rc-update del "$svc" default >/dev/null 2>&1
-done
-rm -rf /etc/init.d/{sing-box,argo}
+rc-service sing-box stop >/dev/null 2>&1
+rc-update del sing-box default >/dev/null 2>&1
+rm -f /etc/init.d/sing-box
 else
-for svc in sing-box argo wg-quick@wgcf warp-go; do
-systemctl stop "$svc" >/dev/null 2>&1
-systemctl disable "$svc" >/dev/null 2>&1
-done
-rm -rf /etc/systemd/system/{sing-box.service,argo.service}
+systemctl stop sing-box >/dev/null 2>&1
+systemctl disable sing-box >/dev/null 2>&1
+rm -f /etc/systemd/system/sing-box.service
 fi
-ps -ef | grep '[c]loudflared' | awk '{print $2}' | xargs kill 2>/dev/null
-ps -ef | grep '[s]bwpph' | awk '{print $2}' | xargs kill 2>/dev/null
-ps -ef | grep '[w]arp-go' | awk '{print $2}' | xargs kill 2>/dev/null
-kill -15 $(pgrep -f 'websbox' 2>/dev/null) >/dev/null 2>&1
-rm -rf /etc/s-box sbyg_update /usr/bin/sb /root/geoip.db /root/geosite.db /root/warpapi /root/warpip /root/websbox
-rm -f /etc/local.d/alpineargo.start /etc/local.d/alpinesub.start /etc/local.d/alpinews5.start
+rm -rf /etc/s-box sbyg_update /usr/bin/sb
 uncronsb
 for ipt in iptables ip6tables; do
 $ipt -t nat -D PREROUTING -j SBHY2PORT >/dev/null 2>&1

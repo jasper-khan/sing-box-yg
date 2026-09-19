@@ -1,12 +1,10 @@
-v26.4.12-fork.6更新内容：
+v26.4.12-fork.7更新内容：
 
 注意：从旧的多协议版本升级，必须先卸载再重装；只点菜单6更新脚本不会清理旧配置中的其它协议 inbound。
 
 更新内容：
-1、修复「变更配置 → 证书路径」：证书或私钥文件不存在时不再把无效路径写入配置并重启服务
-2、修复 Hysteria2 分享链接的 pinSHA256：自签证书换成自带证书后不再残留旧指纹；自签判断同时校验证书与私钥路径
-3、修复 UUID 修改：增加格式校验并改用 jq 改写，避免特殊字符写坏配置
-4、菜单文案清理：去掉已删除的订阅相关字样
-5、README 修正 Reality 伪装域名的菜单指引（3 → 3）
+1、卸载清理精简：只处理本 fork 自己的组件（sing-box 服务、/etc/s-box、/usr/bin/sb、crontab 的 sing-box 行、SBHY2PORT 链）
+2、移除旧版残留清理：不再处理 Argo / WARP / wg-quick / warp-go / websbox / sbwpph / cloudflared / geoip.db / geosite.db（老机器需先用上游脚本卸载或手动清理）
+3、fork-check 新增 5b 守卫：unins/uncronsb 不得再引用上述旧功能残留
 
 详见：https://github.com/jasper-khan/sing-box-yg

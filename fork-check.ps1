@@ -68,7 +68,7 @@ if ($text -notmatch 'raw\.githubusercontent\.com/jasper-khan/sing-box-yg/main/sb
 
 # 5) fork scope: only vless-reality + hysteria2 may remain.
 #    Removed protocols must be gone, and the Argo tunnel feature must not come back.
-#    (uninstall may still mention legacy argo/cloudflared leftovers on purpose)
+#    (unins/uncronsb must not reference removed-feature leftovers either: see 5b)
 $removed = [regex]::Matches($text, '(?i)\b(vmess|tuic|anytls)\b|cfargo|argoym|cloudflared tunnel') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($removed) {
   $errors += "removed protocol code reappeared: $($removed -join ', ')"
@@ -83,12 +83,21 @@ foreach ($name in 'sb10', 'sb11') {
   $types = [regex]::Matches($tmpl.Groups[1].Value, '"type"\s*:\s*"([a-z0-9]+)"') | ForEach-Object { $_.Groups[1].Value }
   $present = @($types | Where-Object { $_ -in @('vless', 'hysteria2') })
   if ($present.Count -lt 2) { $errors += "$name template lost vless/hysteria2 inbound" }
-  # WireGuard/WARP must not return to the shipped configs. Only the config
-  # templates are scanned, so unins cleanup of legacy warp-go/wg-quick
-  # leftovers (outside these heredocs) stays allowed.
+  # WireGuard/WARP must not return to the shipped configs (only the config
+  # templates are scanned here; legacy-cleanup references are covered by 5b).
   $wgMarkers = [regex]::Matches([regex]::Unescape($tmpl.Groups[1].Value), '(?i)\b(?:wireguard|warp|wg-quick|cfwarp)\b|"endpoints"\s*:') |
     ForEach-Object { $_.Value } | Sort-Object -Unique
   if ($wgMarkers) { $errors += "$name template contains wireguard/WARP markers: $($wgMarkers -join ', ')" }
+}
+
+# 5b) uninstall must only clean this fork's own components; legacy argo/warp/
+#     websbox/sbwpph/cloudflared/geoip/geosite cleanup was removed on purpose.
+foreach ($fn in 'unins', 'uncronsb') {
+  $body = [regex]::Match($text, "(?ms)^$fn\(\)\{.*?^\}")
+  if ($body.Success) {
+    $legacy = [regex]::Matches($body.Value, '(?i)\bargo\b|\bwarp-go\b|\bwg-quick\b|\bsbwpph\b|\bwebsbox\b|\bcloudflared\b|\bgeoip\.db\b|\bgeosite\.db\b') | ForEach-Object { $_.Value } | Sort-Object -Unique
+    if ($legacy) { $errors += "$fn still references removed-feature leftovers: $($legacy -join ', ')" }
+  }
 }
 
 # 6) config files must be edited by JSON path (jq), never by fixed line numbers:
