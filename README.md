@@ -1,5 +1,5 @@
 ### 本 fork：Sing-box-yg 一键双协议共存脚本（VPS 专用，仅 vless-reality + hysteria2）
-> 边界：本 fork 只维护 VPS 版 `sb.sh`（vless-reality + hysteria2 两个协议）。上游的 Serv00/Hostuno 相关文件（`serv00.sh`、`serv00keep.sh`、`serv00.yml`、`SSH.yml`、`kp.sh`、`sb.txt`、`app.js`、`index.html`、`sversion`、`workers_keep.js`、`sbwpph_amd64`、`sbwpph_arm64`）已从本 fork 删除；需要这些文件请去上游仓库。
+> 边界：本 fork 只维护 VPS 版 `sb.sh`（vless-reality + hysteria2 两个协议）。上游的 Serv00/Hostuno 相关文件（`serv00.sh`、`serv00keep.sh`、`serv00.yml`、`SSH.yml`、`kp.sh`、`sb.txt`、`app.js`、`index.html`、`sversion`、`workers_keep.js`、`sbwpph_amd64`、`sbwpph_arm64`、`.github/workflows/main.yml`）已从本 fork 删除；需要这些文件请去上游仓库。
 
 ### 注：本项目分享订阅节点都为本地化生成，不使用节点转换、订阅器等第三方外链引用，无需担心节点订阅被外链作者查看
 
@@ -93,7 +93,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/s
 
 ### 二、Serv00/Hostuno（已从本 fork 删除）
 
-* 本 fork 已删除上游 Serv00/Hostuno 相关文件（`serv00.sh`、`serv00keep.sh`、`serv00.yml`、`SSH.yml`、`kp.sh`、`sb.txt`、`app.js`、`index.html`、`sversion`、`workers_keep.js`、`sbwpph_amd64`、`sbwpph_arm64`），仓库只保留 VPS 版 `sb.sh`。
+* 本 fork 已删除上游 Serv00/Hostuno 相关文件（`serv00.sh`、`serv00keep.sh`、`serv00.yml`、`SSH.yml`、`kp.sh`、`sb.txt`、`app.js`、`index.html`、`sversion`、`workers_keep.js`、`sbwpph_amd64`、`sbwpph_arm64`、`.github/workflows/main.yml`（serv00 保活 Action）），仓库只保留 VPS 版 `sb.sh`。
 * 需要 Serv00/Hostuno 脚本请前往上游仓库 `yonggekkk/sing-box-yg`；上游该部分是三协议（含 vmess-ws/Argo），与本 fork 的双协议范围无关。
 
 -----------------------------------------------------
