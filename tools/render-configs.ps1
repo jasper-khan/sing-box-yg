@@ -194,6 +194,12 @@ foreach ($name in @('sb10', 'sb11')) {
             Stop-WithError ("sb10.json rule count is {0} (expected 6: quic block + 4 split channels + fallback)." -f $rules.Count)
         }
 
+        $quicRule = $rules[0]
+        $quicProtocols = @($quicRule.protocol)
+        if ($quicProtocols.Count -ne 2 -or $quicProtocols -cnotcontains 'quic' -or $quicProtocols -cnotcontains 'stun') {
+            Stop-WithError 'sb10.json rule[0] is no longer the quic/stun block rule.'
+        }
+
         $splitOutbounds = @('warp-IPv4-out', 'warp-IPv6-out', 'vps-outbound-v4', 'vps-outbound-v6')
         for ($index = 0; $index -lt $splitOutbounds.Count; $index++) {
             $rule = $rules[1 + $index]
@@ -201,6 +207,19 @@ foreach ($name in @('sb10', 'sb11')) {
             if ($actual -cne $splitOutbounds[$index]) {
                 Stop-WithError ("sb10.json rule[{0}] outbound is '{1}' (expected '{2}')." -f (1 + $index), $actual, $splitOutbounds[$index])
             }
+            $sentinel = @($rule.domain_suffix)
+            if ($sentinel.Count -ne 1 -or [string]$sentinel[0] -cne 'yg_kkk') {
+                Stop-WithError ("sb10.json rule[{0}] lost the yg_kkk sentinel domain list." -f (1 + $index))
+            }
+        }
+
+        $fallback = $rules[5]
+        $fallbackOut = if ($fallback.PSObject.Properties['outbound']) { [string]$fallback.outbound } else { '' }
+        if ($fallbackOut -cne 'direct' -and $fallbackOut -cne 'warp-IPv4-out') {
+            Stop-WithError ("sb10.json rule[5] (fallback) outbound is '{0}' (expected direct or warp-IPv4-out)." -f $fallbackOut)
+        }
+        if ($fallback.network -isnot [string]) {
+            Stop-WithError 'sb10.json rule[5] network must keep the legacy string form (1.10 kernel).'
         }
     }
     else {
@@ -212,6 +231,11 @@ foreach ($name in @('sb10', 'sb11')) {
 
         if ($rules.Count -ne 10) {
             Stop-WithError ("sb11.json rule count is {0} (expected 10: sniff + 4 resolve/outbound pairs + fallback)." -f $rules.Count)
+        }
+
+        $sniffAction = if ($rules[0].PSObject.Properties['action']) { [string]$rules[0].action } else { '' }
+        if ($sniffAction -cne 'sniff') {
+            Stop-WithError 'sb11.json rule[0] is no longer the sniff rule (split-rule indices would shift).'
         }
 
         $splitTargets = @('warp-out', 'warp-out', 'direct', 'direct')
@@ -228,6 +252,21 @@ foreach ($name in @('sb10', 'sb11')) {
             if ($actualOutbound -cne $splitTargets[$index]) {
                 Stop-WithError ("sb11.json rule[{0}] outbound is '{1}' (expected '{2}')." -f (2 + 2 * $index), $actualOutbound, $splitTargets[$index])
             }
+            foreach ($ruleIndex in @((1 + 2 * $index), (2 + 2 * $index))) {
+                $sentinel = @($rules[$ruleIndex].domain_suffix)
+                if ($sentinel.Count -ne 1 -or [string]$sentinel[0] -cne 'yg_kkk') {
+                    Stop-WithError ("sb11.json rule[{0}] lost the yg_kkk sentinel domain list." -f $ruleIndex)
+                }
+            }
+        }
+
+        $fallback = $rules[9]
+        $fallbackOut = if ($fallback.PSObject.Properties['outbound']) { [string]$fallback.outbound } else { '' }
+        if ($fallbackOut -cne 'direct' -and $fallbackOut -cne 'warp-out') {
+            Stop-WithError ("sb11.json rule[9] (fallback / global-egress) outbound is '{0}' (expected direct or warp-out)." -f $fallbackOut)
+        }
+        if ($fallback.network -isnot [array]) {
+            Stop-WithError 'sb11.json rule[9] network must use the list form (1.11+ kernels silently ignore the legacy string).'
         }
     }
 }

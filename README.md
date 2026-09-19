@@ -20,6 +20,7 @@
 * vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时不询问（只打印提示），需要更换用菜单 `3` → `3`。
 * 自己申请的 Hysteria2 证书：用菜单 `3` → `1`（或主菜单 `11`）填写证书文件路径与私钥文件路径，脚本会校验文件存在、写入配置并重启服务。不填就继续用自签证书。
 * 脚本自更新、版本检查与安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
+* 仓库自带自动化守卫：`.github/workflows/fork-check.yml` 在每次 push / PR 自动跑 `bash -n sb.sh`、`fork-check.ps1`、`tools/render-configs.ps1`。合并上游后如果这些 fork 边界被改丢（协议范围、`foothill.edu`、`fp=firefox`、WARP-WireGuard 结构、域名分流菜单、变更配置选项数等），GitHub 上会直接变成红灯，不会静默通过。
 * 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示这些不变量都还在——默认伪装域名、服务端模板结构、协议范围、自更新与版本 URL 全部归本 fork（含 `lnsb()`/`upsbyg()` 函数体内的 URL）、`version` 文件归本 fork、UUID 变更同步 hy2 密码、分享链接指纹 `fp=firefox`、“不再按行号改配置 / 不再生成客户端配置”、“GitLab/Telegram 不得回流”、“本地IP订阅服务不得回流”、上游推广字样不得回流、WARP-WireGuard 通道结构（账户注册函数 + 两个模板的 wireguard 出站/分流域名规则 + 按 JSON 路径写入的分流菜单）与“变更配置菜单保持 6 项”。
 * 服务端配置另可用 `tools/render-configs.ps1` 渲染校验：inbounds 只允许 `vless,hysteria2`；sb10 出站为 `direct`×5 + `wireguard` + `block`（含 4 条分流规则），sb11 出站为 `direct` + `endpoints` 的 wireguard（规则必须是 `sniff` + 4 组 resolve/outbound 对 + 兜底，共 10 条）。
 * 从 fork.11 之前的版本（含旧的多协议版本）升级：必须**先卸载再重装**。菜单 2 卸载后会删除 `/usr/bin/sb`，请重新执行本 README 的安装命令并选菜单 1。只点菜单 6"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`，也不会注册 WARP-WireGuard 账户（菜单 3 → 6 的域名分流会读到旧结构）；旧配置里残留的其它协议 inbound 不会被清理；卸载只清理本 fork 组件（sing-box 服务、`/etc/s-box`、`/usr/bin/sb`、crontab 的 sing-box 行、SBHY2PORT 链、脚本目录的 `sbyg_update` 标记），不再处理旧版 Argo/WARP/websbox 等残留。
@@ -46,8 +47,9 @@ bash <(curl -Ls https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/s
 
 1. `git fetch upstream`
 2. `git merge upstream/main`：不要使用 `-X ours`。冲突时手工解决，明确保留本 fork 的删除边界（vmess/Argo、tuic、anytls、WARP-Socks5/warp-plus、端点 IP 优选、GitLab 订阅、Telegram 推送、本地IP订阅服务相关功能不得重新引入，删除处保持删除）；WARP-WireGuard 出站与域名分流（菜单 `3` → `6`，fork.11 结构）属于要保留的功能。接受 vless-reality、hysteria2 路径上的上游改动，并保留 `foothill.edu` 默认值、`fp=firefox` 默认指纹与指向本 fork 的自更新/版本 URL。
-3. 合并后依次运行：`bash -n sb.sh`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/render-configs.ps1`。
-4. 服务端配置的读写已全部改为按 jq 字段路径（`.inbounds[0]` = vless-reality、`.inbounds[1]` = hysteria2），上游增删字段不再影响这些功能；脚本中已不存在按行号改写配置的 sed，`fork-check.ps1` 会守住这一点。
+3. 合并后依次运行：`bash -n sb.sh`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/render-configs.ps1`；三条全绿再 push，push 后 GitHub Actions 会再跑一遍同样的检查。
+4. 不要用会把 fork 改动真正覆盖掉的操作：`git reset --hard upstream/main`、`git checkout upstream/main -- .`、`git merge -X theirs upstream/main`。要合上游就用第 2 步的普通 merge，冲突必须人工按 fork 边界解决。
+5. 服务端配置的读写已全部改为按 jq 字段路径（`.inbounds[0]` = vless-reality、`.inbounds[1]` = hysteria2），上游增删字段不再影响这些功能；脚本中已不存在按行号改写配置的 sed，`fork-check.ps1` 会守住这一点。
 
 -----------------------------------------------------
 

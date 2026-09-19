@@ -1,0 +1,26 @@
+name: fork-check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash syntax check
+        run: bash -n sb.sh
+
+      - name: fork invariants (fork-check.ps1)
+        shell: pwsh
+        run: ./fork-check.ps1
+
+      - name: server config templates (render-configs.ps1)
+        shell: pwsh
+        run: ./tools/render-configs.ps1
