@@ -627,6 +627,7 @@ cat > /etc/s-box/sb11.json <<EOF
 EOF
 [[ "$sbnh" == "1.10" ]] && num=10 || num=11
 cp /etc/s-box/sb${num}.json /etc/s-box/sb.json
+defobfs
 }
 
 sbservice(){
@@ -1060,6 +1061,14 @@ red "仅支持1.10.7内核可用" && exit
 fi
 }
 
+defobfs(){
+newpw=$(openssl rand -hex 16)
+for f in $sbfiles; do
+[[ -f $f ]] || continue
+jq --arg pw "$newpw" '(.inbounds[1].obfs) = {"type":"salamander","password":$pw}' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+}
+
 setobfs(){
 sbactive
 obfs_now=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].obfs.password // empty' 2>/dev/null)
@@ -1072,10 +1081,7 @@ yellow "当前状态：未开启（默认）"
 fi
 readp "1：开启/重置混淆密码（随机生成）\n2：关闭混淆\n0：返回上层\n请选择【0-2】：" menu
 if [ "$menu" = "1" ]; then
-newpw=$(openssl rand -hex 16)
-for f in $sbfiles; do
-jq --arg pw "$newpw" '(.inbounds[1].obfs) = {"type":"salamander","password":$pw}' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-done
+defobfs
 restartsb && sbshare > /dev/null 2>&1
 green "Hy2混淆已开启，分享链接已刷新（客户端请重新导入节点）" && sleep 2 && sb
 elif [ "$menu" = "2" ]; then

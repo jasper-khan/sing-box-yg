@@ -19,7 +19,7 @@
 * 节点名称：安装时会问一次（回车 = 默认主机名），装完可用菜单 `3` → `2` 随时修改（输入 `0` 恢复默认主机名）。客户端里显示的就是你输入的名字（空格保留，不再替换成 `-`；只去掉 `#`），**不会再自动加 `vl-reality-` / `hy2-` 前缀**；两条节点同名，靠协议与端口区分。改完自动刷新分享链接。
 * vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时不询问（只打印提示），需要更换用菜单 `3` → `3`。
 * 自己申请的 Hysteria2 证书：用菜单 `3` → `1`（或主菜单 `11`）填写证书文件路径与私钥文件路径，脚本会校验文件存在、写入配置并重启服务。不填就继续用自签证书。
-* Hy2 防探测与混淆：两个内核模板的 hysteria2 端口默认带 `masquerade: https://foothill.edu`（探测请求反代 foothill.edu，不再裸回 404）；菜单 `3` → `7` 可开关 salamander 混淆（开启后自动生成随机密码、同步 sb10/sb11/sb.json 并刷新分享链接，客户端需重新导入）。
+* Hy2 防探测与混淆：两个内核模板的 hysteria2 端口默认带 `masquerade: https://foothill.edu`（探测请求反代 foothill.edu，不再裸回 404）；salamander 混淆默认开启，安装时自动生成随机密码写入 sb10/sb11/sb.json，分享链接自动带 obfs 参数；菜单 `3` → `7` 可关闭或重置（改完自动刷新链接，客户端需重新导入）。
 * 脚本自更新、版本检查与安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
 * 仓库自带自动化守卫：`.github/workflows/fork-check.yml` 在每次 push / PR 自动跑 `bash -n sb.sh`、`fork-check.ps1`、`tools/render-configs.ps1`。合并上游后如果这些 fork 边界被改丢（协议范围、`foothill.edu`、`fp=firefox`、WARP-WireGuard 结构、域名分流菜单、变更配置选项数等），GitHub 上会直接变成红灯，不会静默通过。
 * 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示这些不变量都还在——默认伪装域名、服务端模板结构、协议范围、自更新与版本 URL 全部归本 fork（含 `lnsb()`/`upsbyg()` 函数体内的 URL）、`version` 文件归本 fork、UUID 变更同步 hy2 密码、分享链接指纹 `fp=firefox`、“不再按行号改配置 / 不再生成客户端配置”、“GitLab/Telegram 不得回流”、“本地IP订阅服务不得回流”、上游推广字样不得回流、WARP-WireGuard 通道结构（账户注册函数 + 两个模板的 wireguard 出站/分流域名规则 + 按 JSON 路径写入的分流菜单）与“变更配置菜单保持 6 项”。

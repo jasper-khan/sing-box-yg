@@ -232,6 +232,16 @@ if (-not $obfn.Success) {
   if ($obfn.Value -notmatch 'salamander') { $errors += 'setobfs() lost the salamander obfs mode' }
   if ($obfn.Value -notmatch '\(\.inbounds\[1\]\.obfs\)') { $errors += 'setobfs() no longer writes obfs by JSON path' }
 }
+$dbfn = [regex]::Match($text, '(?ms)^defobfs\(\)\{.*?^\}')
+if (-not $dbfn.Success) {
+  $errors += 'defobfs() default-on installer helper not found'
+} elseif ($dbfn.Value -notmatch 'salamander') {
+  $errors += 'defobfs() lost the salamander obfs mode'
+}
+$installToken = 'cp /etc/s-box/sb${num}.json /etc/s-box/sb.json' + "`ndefobfs"
+if (-not $text.Contains($installToken)) {
+  $errors += 'installer no longer enables hy2 obfs by default'
+}
 
 # 13) the local-IP subscription server (busybox httpd) must stay removed.
 $subHits = [regex]::Matches($text, '(?i)\bipsub\b|subport\.log|subtoken\.log|busybox[^\r\n]*httpd|jhsub\.txt|websbox') | ForEach-Object { $_.Value } | Sort-Object -Unique
