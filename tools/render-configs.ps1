@@ -184,6 +184,10 @@ foreach ($name in @('sb10', 'sb11')) {
 
     Assert-ExactTypes -Name $name -Kind 'inbound' -Expected @($expectedTypes[$name]) `
         -Actual @($json.inbounds | ForEach-Object { [string]$_.type })
+
+    if ([string]$json.inbounds[1].masquerade -cne 'https://foothill.edu') {
+        Stop-WithError "$name.json hy2 inbound masquerade must stay https://foothill.edu."
+    }
     Assert-ExactTypes -Name $name -Kind 'outbound' -Expected @($expectedOutbounds[$name]) `
         -Actual @($json.outbounds | ForEach-Object { [string]$_.type })
 

@@ -364,6 +364,7 @@ cat > /etc/s-box/sb10.json <<EOF
             }
         ],
         "ignore_client_bandwidth":false,
+        "masquerade":"https://foothill.edu",
         "tls": {
             "enabled": true,
             "alpn": [
@@ -510,6 +511,7 @@ cat > /etc/s-box/sb11.json <<EOF
             }
         ],
         "ignore_client_bandwidth":false,
+        "masquerade":"https://foothill.edu",
         "tls": {
             "enabled": true,
             "alpn": [
@@ -704,12 +706,18 @@ fi
 
 result_vl_hy2(){
 server_ip=$(cat /etc/s-box/server_ip.log)
-uuid=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].users[0].uuid')
-vl_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
-vl_name=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')
+uuid=$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].users[0].uuid')
+vl_port=$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
+vl_name=$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')
 public_key=$(cat /etc/s-box/public.key)
-short_id=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.reality.short_id[0]')
-hy2_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
+short_id=$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.reality.short_id[0]')
+hy2_port=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
+hy2_obfspwd=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].obfs.password // empty' 2>/dev/null)
+if [[ -n $hy2_obfspwd ]]; then
+hyobs="&obfs=salamander&obfs-password=$hy2_obfspwd"
+else
+hyobs=
+fi
 hy2_ports=$(for ipt in iptables ip6tables; do $ipt -t nat -nL SBHY2PORT --line 2>/dev/null | awk '/DNAT/{for(i=1;i<=NF;i++)if($i~/^dpts?:[0-9]/)print $i}'; done | sed 's/dpts://; s/dpt://' | awk '!a[$0]++' | tr '\n' ',' | sed 's/,$//')
 if [[ -n $hy2_ports ]]; then
 cmhy2pt=$(echo $hy2_ports | tr ':' '-')
@@ -717,8 +725,8 @@ hyps="&mport=$cmhy2pt"
 else
 hyps=
 fi
-hy2_certpath=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path' 2>/dev/null)
-hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
+hy2_certpath=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path' 2>/dev/null)
+hy2_sniname=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
 hy2_name=$(openssl x509 -in "$hy2_certpath" -noout -text 2>/dev/null | grep -oE 'DNS:[^, ]+' | head -n 1 | sed 's/DNS://')
 hy2_name=${hy2_name:-$(openssl x509 -in "$hy2_certpath" -noout -subject 2>/dev/null | sed 's/.*CN *= *//')}
 hy2_name=${hy2_name#\*.}
@@ -753,7 +761,7 @@ echo
 reshy2(){
 echo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=0&allowInsecure=0$hyps&sni=$hy2_name${SHA256:+&pinSHA256=$SHA256}#$sbnode"
+hy2_link="hysteria2://$uuid@$sb_hy2_ip:$hy2_port?security=tls&alpn=h3&insecure=0&allowInsecure=0$hyps$hyobs&sni=$hy2_name${SHA256:+&pinSHA256=$SHA256}#$sbnode"
 echo "$hy2_link" > /etc/s-box/hy2.txt
 red "🚀【 Hysteria-2 】节点信息如下：" && sleep 2
 echo
@@ -802,8 +810,8 @@ echo
 }
 
 setcert(){
-certc_now=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path' 2>/dev/null)
-certp_now=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
+certc_now=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path' 2>/dev/null)
+certp_now=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
 echo
 blue "当前证书：${certc_now:-未知}"
 blue "当前私钥：${certp_now:-未知}"
@@ -851,7 +859,7 @@ fi
 
 changeym(){
 echo
-vl_na="当前伪装域名：$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')"
+vl_na="当前伪装域名：$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')"
 green "$vl_na"
 readp "请输入新的Reality伪装域名 (回车使用foothill.edu)：" ym_vl_re
 ym_vl_re=${ym_vl_re:-foothill.edu}
@@ -863,14 +871,14 @@ blue "Vless-reality伪装域名已更换为：$ym_vl_re"
 sleep 3 && sb
 }
 allports(){
-vl_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
-hy2_port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
+vl_port=$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
+hy2_port=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
 hy2_ports=$(for ipt in iptables ip6tables; do $ipt -t nat -nL SBHY2PORT --line 2>/dev/null | awk '/DNAT/{for(i=1;i<=NF;i++)if($i~/^dpts?:[0-9]/)print $i}'; done | sed 's/dpts://; s/dpt://' | awk '!a[$0]++' | tr '\n' ',' | sed 's/,$//')
 [[ -n $hy2_ports ]] && hy2zfport="$hy2_ports" || hy2zfport="未添加"
 }
 
 sbportjump(){
-hy2p=$(sed 's://.*::g' /etc/s-box/sb.json 2>/dev/null | jq -r '.inbounds[1].listen_port' 2>/dev/null)
+hy2p=$(cat /etc/s-box/sb.json 2>/dev/null | jq -r '.inbounds[1].listen_port' 2>/dev/null)
 if [[ -n $hy2p && $hy2p =~ ^[0-9]+$ ]]; then
 for ipt in iptables ip6tables; do
 while $ipt -t nat -nL PREROUTING --line 2>/dev/null | awk -v p=":$hy2p" '/DNAT/{for(i=1;i<=NF;i++)if(substr($i,length($i)-length(p)+1)==p && $1+0>0){print $1;exit}}' | grep -q .; do
@@ -977,7 +985,7 @@ green "1：添加Hysteria2范围端口"
 green "2：添加Hysteria2单端口"
 green "0：返回上层"
 readp "请选择【0-2】：" menu
-port=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
+port=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
 if [ "$menu" = "1" ]; then
 fports && sbshare > /dev/null 2>&1 && changeport
 elif [ "$menu" = "2" ]; then
@@ -1001,7 +1009,7 @@ fi
 
 changeuuid(){
 echo
-olduuid=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].users[0].uuid')
+olduuid=$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].users[0].uuid')
 green "全协议的uuid (密码)：$olduuid"
 echo
 yellow "1：自定义全协议的uuid (密码)"
@@ -1052,6 +1060,35 @@ red "仅支持1.10.7内核可用" && exit
 fi
 }
 
+setobfs(){
+sbactive
+obfs_now=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].obfs.password // empty' 2>/dev/null)
+echo
+blue "Hy2混淆（salamander）：把 hy2 流量打乱成随机特征，用于应对专门识别/掐 QUIC 的网络环境"
+if [[ -n $obfs_now ]]; then
+green "当前状态：已开启"
+else
+yellow "当前状态：未开启（默认）"
+fi
+readp "1：开启/重置混淆密码（随机生成）\n2：关闭混淆\n0：返回上层\n请选择【0-2】：" menu
+if [ "$menu" = "1" ]; then
+newpw=$(openssl rand -hex 16)
+for f in $sbfiles; do
+jq --arg pw "$newpw" '(.inbounds[1].obfs) = {"type":"salamander","password":$pw}' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+restartsb && sbshare > /dev/null 2>&1
+green "Hy2混淆已开启，分享链接已刷新（客户端请重新导入节点）" && sleep 2 && sb
+elif [ "$menu" = "2" ]; then
+for f in $sbfiles; do
+jq 'del(.inbounds[1].obfs)' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+restartsb && sbshare > /dev/null 2>&1
+green "Hy2混淆已关闭，分享链接已刷新" && sleep 2 && sb
+else
+sb
+fi
+}
+
 changefl(){
 if [[ "$sbnh" == "1.10" ]]; then fli=(1 2 3 4); flb=5; else fli=(1 3 5 7); flb=9; fi
 fln=("WARP-WireGuard-IPv4优先" "WARP-WireGuard-IPv6优先" "VPS本地-IPv4优先" "VPS本地-IPv6优先")
@@ -1059,11 +1096,11 @@ echo
 blue "对所有协议进行统一的域名分流 (后缀域名方式，双栈优先模式)"
 green "当前分流域名如下："
 for i in 0 1 2 3; do
-flnow=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r ".route.rules[${fli[$i]}].domain_suffix | join(\" \")" 2>/dev/null)
+flnow=$(cat /etc/s-box/sb.json | jq -r ".route.rules[${fli[$i]}].domain_suffix | join(\" \")" 2>/dev/null)
 [[ -z $flnow || $flnow = "yg_kkk" ]] && flnow="未分流"
 blue "$((i+1))：${fln[$i]}：$flnow"
 done
-flog=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r ".route.rules[$flb].outbound" 2>/dev/null)
+flog=$(cat /etc/s-box/sb.json | jq -r ".route.rules[$flb].outbound" 2>/dev/null)
 case "$flog" in
 warp-out|warp-IPv4-out|warp-IPv6-out) flog="全局走 Cloudflare WARP" ;;
 *) flog="全局走 VPS 直连 (默认)" ;;
@@ -1127,7 +1164,7 @@ changeserv(){
 sbactive
 echo
 green "Sing-box配置变更选择如下:"
-readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n6：设置域名分流（WARP-WireGuard / VPS直连）\n0：返回上层\n请选择【0-6】：" menu
+readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n6：设置域名分流（WARP-WireGuard / VPS直连）\n7：设置Hy2混淆（salamander，防QUIC特征被识别）\n0：返回上层\n请选择【0-7】：" menu
 if [ "$menu" = "1" ];then
 setcert
 elif [ "$menu" = "2" ];then
@@ -1140,6 +1177,8 @@ elif [ "$menu" = "5" ];then
 changeip
 elif [ "$menu" = "6" ];then
 changefl
+elif [ "$menu" = "7" ];then
+setobfs
 else 
 sb
 fi
@@ -1351,11 +1390,11 @@ fi
 
 showprotocol(){
 allports
-hy2_certpath=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path')
-hy2_sniname=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path')
+hy2_certpath=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path')
+hy2_sniname=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path')
 [[ "$hy2_certpath" = '/etc/s-box/cert.pem' && "$hy2_sniname" = '/etc/s-box/private.key' ]] && hy2_zs="自签证书" || hy2_zs="域名证书"
 echo -e "Sing-box节点关键信息如下："
-echo -e "🚀【 Vless-reality 】${yellow}端口:$vl_port  Reality域名证书伪装地址：$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')${plain}"
+echo -e "🚀【 Vless-reality 】${yellow}端口:$vl_port  Reality域名证书伪装地址：$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')${plain}"
 echo -e "🚀【  Hysteria-2   】${yellow}端口:$hy2_port  证书形式:$hy2_zs  转发多端口: $hy2zfport${plain}"
 echo "------------------------------------------------------------------------------------"
 }
@@ -1462,7 +1501,7 @@ fi
 echo -e "本地IPV4地址：$blue$vps_ipv4$plain   本地IPV6地址：$blue$vps_ipv6$plain"
 echo -e "服务器地区：$blue$location$plain"
 if [[ "$sbnh" == "1.10" ]]; then
-rpip=$(sed 's://.*::g' /etc/s-box/sb.json | jq -r '.outbounds[0].domain_strategy') 2>/dev/null
+rpip=$(cat /etc/s-box/sb.json | jq -r '.outbounds[0].domain_strategy') 2>/dev/null
 if [[ $rpip = 'prefer_ipv6' ]]; then
 v4_6="IPV6优先出站($showv6)"
 elif [[ $rpip = 'prefer_ipv4' ]]; then

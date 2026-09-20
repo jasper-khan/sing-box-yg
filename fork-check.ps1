@@ -180,12 +180,12 @@ $cs = [regex]::Match($text, '(?ms)^changeserv\(\)\{.*?^\}')
 if (-not $cs.Success) {
   $errors += 'changeserv menu not found'
 } else {
-  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changeip', 'changefl') {
+  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changeip', 'changefl', 'setobfs') {
     if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
   }
   $csOpts = [regex]::Matches($cs.Value, '"\$menu"\s*=\s*"([0-9]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
-  if (($csOpts -join ',') -ne '1,2,3,4,5,6') {
-    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5,6)"
+  if (($csOpts -join ',') -ne '1,2,3,4,5,6,7') {
+    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5,6,7)"
   }
 }
 
@@ -209,6 +209,28 @@ if ($text -match '#(?:vl-reality|hy2)-\$sbnode') {
 # 12b) node name keeps spaces: the input handlers must not rewrite spaces to dashes.
 if ($text.Contains("tr ' \t' '--'")) {
   $errors += 'node-name input rewrites spaces to dashes again'
+}
+
+# 12c) hy2 hardening: both templates keep the foothill.edu masquerade, the
+# obfs switch exists, share links append obfs params, and sb.json is never
+# piped through the legacy s://.*::g sed (it corrupts JSON containing URLs).
+$masqToken = [regex]::Escape('"masquerade":"https://foothill.edu"')
+$masqCount = [regex]::Matches($text, $masqToken).Count
+if ($masqCount -ne 2) {
+  $errors += "hy2 masquerade missing from kernel templates (found $masqCount of 2)"
+}
+if (-not $text.Contains('&allowInsecure=0$hyps$hyobs&sni=')) {
+  $errors += 'hy2 share link no longer appends the obfs parameters'
+}
+if ($text.Contains('s://.*::g')) {
+  $errors += 'sb.json is still preprocessed by the legacy s://.*::g sed (corrupts URLs)'
+}
+$obfn = [regex]::Match($text, '(?ms)^setobfs\(\)\{.*?^\}')
+if (-not $obfn.Success) {
+  $errors += 'setobfs() hy2 obfs switch not found'
+} else {
+  if ($obfn.Value -notmatch 'salamander') { $errors += 'setobfs() lost the salamander obfs mode' }
+  if ($obfn.Value -notmatch '\(\.inbounds\[1\]\.obfs\)') { $errors += 'setobfs() no longer writes obfs by JSON path' }
 }
 
 # 13) the local-IP subscription server (busybox httpd) must stay removed.

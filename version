@@ -1,14 +1,14 @@
-v26.4.12-fork.16更新内容：
+v26.4.12-fork.17更新内容：
 
 注意：从 fork.11 之前的版本升级，必须先卸载再重装；只点菜单6更新脚本不会注册 WARP 账户，也不会重建 sb10/sb11 的 wireguard 出站与分流规则。
 
 更新内容：
-1、节点名称支持空格：安装时与菜单 3 → 2 改名时，空格不再被替换成 "-"，客户端里显示你输入的原名（仍去掉 # 与换行）
-2、fork-check 守卫新增第 12b 项：节点名称输入处理不得再出现空格→"-" 替换逻辑
-3、fork.15：新增 GitHub Actions 自动守卫（bash -n + fork-check + render-configs），render-configs 断言收紧
-4、fork.14：修复菜单 3 → 6 → 5 写 sb10.json 用错下标的 bug
-5、fork.13：菜单 3 → 6 新增第 5 项“其余流量出口”（全局 Cloudflare WARP / 全局 VPS 直连）
-6、fork.12：sb11 兜底分流规则 network 列表写法修复
-7、fork.11：恢复上游 WARP-WireGuard（自动注册账户 + wireguard 出站 + 域名分流菜单）
+1、Hy2 防探测：两个内核模板的 hysteria2 入站默认带伪装（masquerade https://foothill.edu），探测请求不再裸回 404（已装用户重装或重建配置后生效）
+2、新增菜单 3 → 7：Hy2 混淆开关（salamander），开启自动生成随机密码并同步 sb10/sb11/sb.json，分享链接自动附带 obfs=salamander&obfs-password=...（客户端需重新导入）
+3、修复：去掉 21 处读取 sb.json 前的 sed "s://.*::g" 预处理——它会把含 https:// 的行截断导致 jq 解析失败（与 masquerade 冲突）
+4、fork-check 守卫新增第 12c 项：模板 masquerade、setobfs 开关、链接 obfs 参数、禁止 sed 预处理回流
+5、fork.16：节点名称支持空格
+6、fork.15：GitHub Actions 自动守卫（bash -n + fork-check + render-configs）+ render-configs 断言收紧
+7、fork.14：修复菜单 3 → 6 → 5 写 sb10.json 用错下标
 
 详见：https://github.com/jasper-khan/sing-box-yg
