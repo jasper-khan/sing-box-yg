@@ -207,24 +207,24 @@ port=$(shuf -i 10000-65535 -n 1)
 until [[ -z $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") && -z $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] 
 do
 [[ -n $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") || -n $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] && yellow "\n端口被占用，请重新输入端口" && readp "自定义端口:" port
-until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1000 && $((10#$port)) -le 65535 ]]
+until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1 && $((10#$port)) -le 65535 ]]
 do
-yellow "\n端口必须是1000-65535之间的数字" && readp "自定义端口:" port
+yellow "\n端口必须是1-65535之间的数字" && readp "自定义端口:" port
 done
 port=$((10#$port))
 done
 else
-until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1000 && $((10#$port)) -le 65535 ]]
+until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1 && $((10#$port)) -le 65535 ]]
 do
-yellow "\n端口必须是1000-65535之间的数字" && readp "自定义端口:" port
+yellow "\n端口必须是1-65535之间的数字" && readp "自定义端口:" port
 done
 port=$((10#$port))
 until [[ -z $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") && -z $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]]
 do
 [[ -n $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") || -n $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] && yellow "\n端口被占用，请重新输入端口" && readp "自定义端口:" port
-until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1000 && $((10#$port)) -le 65535 ]]
+until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1 && $((10#$port)) -le 65535 ]]
 do
-yellow "\n端口必须是1000-65535之间的数字" && readp "自定义端口:" port
+yellow "\n端口必须是1-65535之间的数字" && readp "自定义端口:" port
 done
 port=$((10#$port))
 done

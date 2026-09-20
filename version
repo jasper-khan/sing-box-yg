@@ -1,12 +1,13 @@
-v26.4.12-fork.18更新内容：
+v26.4.12-fork.19更新内容：
 
 注意：从 fork.11 之前的版本升级，必须先卸载再重装；只点菜单6更新脚本不会注册 WARP 账户，也不会重建 sb10/sb11 的 wireguard 出站与分流规则。
 
 更新内容：
-1、Hy2 混淆（salamander）改为默认开启：安装时自动生成随机密码并注入 sb10/sb11/sb.json，分享链接自动带 obfs=salamander&obfs-password=...；菜单 3 → 7 可关闭或重置密码
-2、fork.17：Hy2 默认伪装 foothill.edu（masquerade）+ 菜单 3 → 7 混淆开关 + 修复 sb.json 读取的 sed 截断
-3、fork.16：节点名称支持空格
-4、fork.15：GitHub Actions 自动守卫（bash -n + fork-check + render-configs）
-5、fork.14：修复菜单 3 → 6 → 5 写 sb10.json 用错下标
+1、自定义协议端口下限从 1000 放宽到 1：Hy2 可直接使用 UDP 443 等低端口；脚本仍会检查端口占用
+2、fork.18：Hy2 混淆（salamander）默认开启：安装时自动生成随机密码并注入 sb10/sb11/sb.json，分享链接自动带 obfs=salamander&obfs-password=...；菜单 3 → 7 可关闭或重置密码
+3、fork.17：Hy2 默认伪装 foothill.edu（masquerade）+ 菜单 3 → 7 混淆开关 + 修复 sb.json 读取的 sed 截断
+4、fork.16：节点名称支持空格
+5、fork.15：GitHub Actions 自动守卫（bash -n + fork-check + render-configs）
+6、fork.14：修复菜单 3 → 6 → 5 写 sb10.json 用错下标
 
 详见：https://github.com/jasper-khan/sing-box-yg
