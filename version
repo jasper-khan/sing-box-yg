@@ -1,13 +1,14 @@
-v26.4.12-fork.15更新内容：
+v26.4.12-fork.16更新内容：
 
 注意：从 fork.11 之前的版本升级，必须先卸载再重装；只点菜单6更新脚本不会注册 WARP 账户，也不会重建 sb10/sb11 的 wireguard 出站与分流规则。
 
 更新内容：
-1、新增 GitHub Actions 自动守卫（.github/workflows/fork-check.yml）：每次 push / PR 自动跑 bash -n sb.sh + fork-check.ps1 + tools/render-configs.ps1，合并上游后若把 fork 边界改丢，GitHub 上会直接红灯
-2、render-configs 守卫收紧：sb11 断言 rule[0] 必须是 sniff、8 条分流规则必须是 yg_kkk 哨兵域名、兜底规则必须是 direct/warp-out 且 network 为列表写法；sb10 断言 rule[0] 是 quic/stun 拦截、4 条分流哨兵、兜底下标 5 与旧字符串写法
-3、fork.14：修复菜单 3 → 6 → 5 写 sb10.json 用错下标的 bug
-4、fork.13：菜单 3 → 6 新增第 5 项“其余流量出口”（全局 Cloudflare WARP / 全局 VPS 直连）
-5、fork.12：sb11 兜底分流规则 network 列表写法修复
-6、fork.11：恢复上游 WARP-WireGuard（自动注册账户 + wireguard 出站 + 域名分流菜单）
+1、节点名称支持空格：安装时与菜单 3 → 2 改名时，空格不再被替换成 "-"，客户端里显示你输入的原名（仍去掉 # 与换行）
+2、fork-check 守卫新增第 12b 项：节点名称输入处理不得再出现空格→"-" 替换逻辑
+3、fork.15：新增 GitHub Actions 自动守卫（bash -n + fork-check + render-configs），render-configs 断言收紧
+4、fork.14：修复菜单 3 → 6 → 5 写 sb10.json 用错下标的 bug
+5、fork.13：菜单 3 → 6 新增第 5 项“其余流量出口”（全局 Cloudflare WARP / 全局 VPS 直连）
+6、fork.12：sb11 兜底分流规则 network 列表写法修复
+7、fork.11：恢复上游 WARP-WireGuard（自动注册账户 + wireguard 出站 + 域名分流菜单）
 
 详见：https://github.com/jasper-khan/sing-box-yg

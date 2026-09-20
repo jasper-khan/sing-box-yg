@@ -286,7 +286,6 @@ green "五、设置节点名称"
 yellow "节点名称就是分享链接末尾显示的名字，回车使用默认主机名：$hostname"
 readp "请输入节点名称：" menu
 menu=$(printf '%s' "$menu" | tr -d '\r\n#')
-menu=$(printf '%s' "$menu" | tr ' \t' '--')
 if [ -n "$menu" ]; then
 printf '%s\n' "$menu" > /etc/s-box/nodename.log
 sbnode=$menu
@@ -838,7 +837,6 @@ green "节点名称已恢复默认主机名：$sbnode"
 sleep 2 && sb
 else
 menu=$(printf '%s' "$menu" | tr -d '\r\n#')
-menu=$(printf '%s' "$menu" | tr ' \t' '--')
 if [ -z "$menu" ]; then
 red "节点名称无效" && sleep 2 && sb
 else

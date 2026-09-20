@@ -206,6 +206,11 @@ if ($text -match '#(?:vl-reality|hy2)-\$sbnode') {
   $errors += 'share links re-added a hard-coded protocol prefix in front of the node name'
 }
 
+# 12b) node name keeps spaces: the input handlers must not rewrite spaces to dashes.
+if ($text.Contains("tr ' \t' '--'")) {
+  $errors += 'node-name input rewrites spaces to dashes again'
+}
+
 # 13) the local-IP subscription server (busybox httpd) must stay removed.
 $subHits = [regex]::Matches($text, '(?i)\bipsub\b|subport\.log|subtoken\.log|busybox[^\r\n]*httpd|jhsub\.txt|websbox') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($subHits) {
