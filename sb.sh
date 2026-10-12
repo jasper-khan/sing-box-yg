@@ -77,6 +77,9 @@ cd
 fi
 if [ -x "$(command -v apt-get)" ]; then
 apt update -y
+printf '%s\n' \
+'iptables-persistent iptables-persistent/autosave_v4 boolean false' \
+'iptables-persistent iptables-persistent/autosave_v6 boolean false' | debconf-set-selections
 apt install jq cron socat busybox iptables-persistent coreutils util-linux -y
 elif [ -x "$(command -v yum)" ]; then
 yum update -y && yum install epel-release -y

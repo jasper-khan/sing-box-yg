@@ -353,6 +353,16 @@ if (-not $flfn.Success) {
   }
 }
 
+# 19) Installing iptables-persistent must skip both initial rule snapshots without prompting.
+foreach ($ipFamily in 'v4', 'v6') {
+  if (-not $text.Contains("iptables-persistent iptables-persistent/autosave_$ipFamily boolean false")) {
+    $errors += "iptables-persistent $ipFamily initial rule save is no longer fixed to No"
+  }
+}
+if ($text -notmatch '\|\s*debconf-set-selections') {
+  $errors += 'iptables-persistent install answers are no longer preseeded'
+}
+
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1
