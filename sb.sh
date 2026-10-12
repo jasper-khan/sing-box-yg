@@ -1099,17 +1099,20 @@ fi
 }
 
 changefl(){
-if [[ "$sbnh" == "1.10" ]]; then fli=(1 2 3 4); flb=5; else fli=(1 3 5 7); flb=9; fi
+mapfile -t fldomains < <(jq -r '.route.rules[] | select(has("domain_suffix") and has("outbound")) | .domain_suffix | join(" ")' /etc/s-box/sb.json)
 fln=("WARP-WireGuard-IPv4优先" "WARP-WireGuard-IPv6优先" "VPS本地-IPv4优先" "VPS本地-IPv6优先")
 echo
 blue "对所有协议进行统一的域名分流 (后缀域名方式，双栈优先模式)"
+if jq -e 'any(.outbounds[]; .tag == "lan-ss-out")' /etc/s-box/sb.json >/dev/null; then
+yellow "本机已作为内网中转，公网节点流量交给落地机；这条链路的域名分流请在落地机设置"
+fi
 green "当前分流域名如下："
 for i in 0 1 2 3; do
-flnow=$(cat /etc/s-box/sb.json | jq -r ".route.rules[${fli[$i]}].domain_suffix | join(\" \")" 2>/dev/null)
+flnow=${fldomains[$i]}
 [[ -z $flnow || $flnow = "yg_kkk" ]] && flnow="未分流"
 blue "$((i+1))：${fln[$i]}：$flnow"
 done
-flog=$(cat /etc/s-box/sb.json | jq -r ".route.rules[$flb].outbound" 2>/dev/null)
+flog=$(jq -r '.route.rules[-1].outbound' /etc/s-box/sb.json)
 case "$flog" in
 warp-out|warp-IPv4-out|warp-IPv6-out) flog="全局走 Cloudflare WARP" ;;
 *) flog="全局走 VPS 直连 (默认)" ;;
@@ -1130,11 +1133,11 @@ case "$gmen" in
 esac
 for f in $sbfiles; do
 case "$f" in
-*/sb10.json) gi=5; gv=$gw10 ;;
-*/sb11.json) gi=9; gv=$gw11 ;;
-*/sb.json) if [[ "$sbnh" == "1.10" ]]; then gi=5; gv=$gw10; else gi=9; gv=$gw11; fi ;;
+*/sb10.json) gv=$gw10 ;;
+*/sb11.json) gv=$gw11 ;;
+*/sb.json) if [[ "$sbnh" == "1.10" ]]; then gv=$gw10; else gv=$gw11; fi ;;
 esac
-jq --arg v "$gv" --argjson i "$gi" '(.route.rules[$i].outbound) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+jq --arg v "$gv" '(.route.rules[-1].outbound) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
 green "其余流量出口已设置为：$gwnow"
@@ -1157,12 +1160,13 @@ red "域名格式有误，未做修改" && sleep 3 && changefl
 return
 fi
 for f in $sbfiles; do
-case "$f" in
-*/sb10.json) i1=$menu; i2=$menu ;;
-*/sb11.json) i1=$((2*menu-1)); i2=$((2*menu)) ;;
-*/sb.json) if [[ "$sbnh" == "1.10" ]]; then i1=$menu; i2=$menu; else i1=$((2*menu-1)); i2=$((2*menu)); fi ;;
-esac
-jq --argjson v "$fl" --argjson a "$i1" --argjson b "$i2" '(.route.rules[$a].domain_suffix) = $v | (.route.rules[$b].domain_suffix) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+jq --argjson v "$fl" --argjson channel "$((menu-1))" '
+[.route.rules | to_entries[] | select(.value | has("domain_suffix")) | .key] as $indices |
+(if ($indices | length) == 4 then [$indices[$channel], $indices[$channel]]
+else [$indices[2*$channel], $indices[2*$channel+1]] end) as $pair |
+$pair[0] as $a | $pair[1] as $b |
+(.route.rules[$a].domain_suffix) = $v | (.route.rules[$b].domain_suffix) = $v
+' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
 green "分流域名已设置为：$fl"
@@ -1368,7 +1372,7 @@ fi
 }
 
 sbshare(){
-rm -rf /etc/s-box/{jhdy,vl_reality,hy2}.txt
+: > /etc/s-box/jhdy.txt
 result_vl_hy2 && resvless && reshy2
 cat /etc/s-box/vl_reality.txt 2>/dev/null >> /etc/s-box/jhdy.txt
 cat /etc/s-box/hy2.txt 2>/dev/null >> /etc/s-box/jhdy.txt
@@ -1415,6 +1419,141 @@ blue "项目地址与使用说明：https://github.com/jasper-khan/sing-box-yg"
 echo
 }
 
+lanprivate(){
+jq -en --arg ip "$1" '
+$ip | select(test("^[0-9]{1,3}(\\.[0-9]{1,3}){3}$")) | split(".") | map(tonumber) |
+select(all(. >= 0 and . <= 255)) |
+.[0] == 10 or (.[0] == 172 and .[1] >= 16 and .[1] <= 31) or (.[0] == 192 and .[1] == 168)
+' >/dev/null 2>&1
+}
+
+lanrunning(){
+if command -v apk >/dev/null 2>&1; then
+rc-service sing-box status 2>/dev/null | grep -q started
+else
+systemctl is-active --quiet sing-box
+fi
+}
+
+lanrestart(){
+if command -v apk >/dev/null 2>&1; then rc-service sing-box restart; else systemctl restart sing-box; fi
+}
+
+lanapply()(
+role=$1; host=${2:-}; port=${3:-0}
+if [[ "$role" != none ]]; then
+if ! lanprivate "$host" || [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
+red "请填写有效的内网 IPv4 地址和 1-65535 端口，未做修改"; exit 1
+fi
+port=$((10#$port))
+if [[ "$role" == landing ]]; then
+ip -4 -j addr show | jq -e --arg ip "$host" 'any(.[].addr_info[]; .local == $ip)' >/dev/null || { red "该内网地址不属于本机，未做修改"; exit 1; }
+if ! jq -e --arg ip "$host" --argjson p "$port" 'any(.inbounds[]; .tag == "lan-ss-in" and .listen == $ip and .listen_port == $p)' /etc/s-box/sb.json >/dev/null && [[ -n $(ss -H -lntu "sport = :$port") ]]; then
+red "端口 $port 已被占用，请换一个端口"; exit 1
+fi
+elif [[ "$role" == relay ]]; then
+if ip -4 -j addr show | jq -e --arg ip "$host" 'any(.[].addr_info[]; .local == $ip)' >/dev/null; then
+red "落地地址不能是本机地址，未做修改"; exit 1
+fi
+if ! timeout 5 bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$host" "$port" 2>/dev/null; then
+red "无法连接 $host:$port，请先在落地机启用内网入口，并检查两机内网和防火墙"; exit 1
+fi
+else
+red "未知机器角色，未做修改"; exit 1
+fi
+fi
+umask 077
+backup=$(mktemp -d /etc/s-box/lan-chain-backup.XXXXXX) || exit 1
+for name in sb10 sb11 sb; do
+cp -p "/etc/s-box/$name.json" "$backup/$name.json" || exit 1
+jq --arg role "$role" --arg host "$host" --argjson port "$port" '
+.inbounds |= map(select(.tag != "lan-ss-in")) |
+.outbounds |= map(select(.tag != "lan-ss-out")) |
+.route.rules |= map(select(.outbound != "lan-ss-out")) |
+if $role == "landing" then
+.inbounds += [{type:"shadowsocks", tag:"lan-ss-in", listen:$host, listen_port:$port, method:"none", password:""}]
+elif $role == "relay" then
+.outbounds += [{type:"shadowsocks", tag:"lan-ss-out", server:$host, server_port:$port, method:"none", password:""}] |
+.route.rules = [{inbound:[.inbounds[] | select(.type == "vless" or .type == "hysteria2") | .tag], outbound:"lan-ss-out"}] + .route.rules
+else . end
+' "$backup/$name.json" > "$backup/$name.new.json" || exit 1
+done
+if ! /etc/s-box/sing-box check -c "$backup/sb.new.json" > "$backup/check.log" 2>&1; then
+red "配置检查失败，现有配置未改动。检查日志：$backup/check.log"; exit 1
+fi
+running=no; lanrunning && running=yes
+pending=yes
+trap 'if [[ $pending == yes ]]; then
+for name in sb10 sb11 sb; do cp -p "$backup/$name.json" "/etc/s-box/$name.json"; done
+[[ $running == yes ]] && lanrestart > "$backup/restore.log" 2>&1
+red "应用失败，已恢复原配置。备份及日志：$backup"
+fi' EXIT
+trap 'exit 1' HUP INT TERM
+for name in sb10 sb11 sb; do
+mv -f "$backup/$name.new.json" "/etc/s-box/$name.json" || exit 1
+done
+if [[ $running == yes ]]; then
+lanrestart > "$backup/restart.log" 2>&1 || exit 1
+sleep 1
+lanrunning || exit 1
+fi
+pending=no
+green "配置已保存，原配置备份：$backup"
+[[ $running == no ]] && yellow "Sing-box 当前未运行，请从主菜单 5 启动后使用"
+case "$role" in
+landing) green "本机作为落地，SS none 仅监听内网：$host:$port"; yellow "到中转机运行 sb → 14 → 2，粘贴：$host:$port" ;;
+relay) green "本机作为中转，两种公网节点经内网连接落地：$host:$port"; yellow "客户端直接使用本机 sb → 8 的节点；域名分流在落地机设置" ;;
+none) green "已取消本机内网链路，恢复原有节点路由" ;;
+esac
+)
+
+lanview(){
+jq -r '
+([.inbounds[] | select(.tag == "lan-ss-in")][0]) as $in |
+([.outbounds[] | select(.tag == "lan-ss-out")][0]) as $out |
+if $in != null then "本机角色：落地\n内网入口（SS none）：\($in.listen):\($in.listen_port)"
+elif $out != null then "本机角色：中转\n落地内网地址：\($out.server):\($out.server_port)\n客户端节点：本机 sb → 8"
+else "本机未配置内网链路" end
+' /etc/s-box/sb.json
+}
+
+lanchain(){
+local choice ip port endpoint index addr
+local -a addresses
+for addr in /etc/s-box/sb10.json /etc/s-box/sb11.json /etc/s-box/sb.json; do
+[[ -f "$addr" ]] || { red "请先安装本 fork 的双协议节点，再配置内网链路"; return 1; }
+done
+while true; do
+echo
+green "Sing-box 内网链式代理（两机之间使用 SS none）"
+yellow "1. 本机作为落地（生成内网连接地址）\n2. 本机作为中转（填写落地内网地址）\n3. 查看当前链路\n4. 取消本机链路\n0. 返回主菜单"
+readp "请选择【0-4】：" choice || return
+case "$choice" in
+1)
+mapfile -t addresses < <(while read -r addr; do lanprivate "$addr" && printf '%s\n' "$addr"; done < <(ip -4 -o addr show scope global | awk '{split($4,a,"/"); print a[1]}'))
+if [[ ${#addresses[@]} == 0 ]]; then red "未找到本机内网 IPv4 地址，请先配置服务器内网"; continue; fi
+for index in "${!addresses[@]}"; do green "$((index+1)). ${addresses[$index]}"; done
+readp "选择本机内网地址编号（回车默认 1）：" index || return
+index=${index:-1}
+if [[ ! "$index" =~ ^[1-9][0-9]{0,2}$ ]] || ((index > ${#addresses[@]})); then red "地址编号无效"; continue; fi
+ip=${addresses[$((index-1))]}
+port=$(jq -r '[.inbounds[] | select(.tag == "lan-ss-in")][0].listen_port // 54321' /etc/s-box/sb.json)
+readp "内网入口端口（回车默认 $port）：" endpoint || return
+lanapply landing "$ip" "${endpoint:-$port}"
+;;
+2)
+readp "粘贴落地机生成的内网连接地址（IPv4:端口）：" endpoint || return
+if [[ ! "$endpoint" =~ ^([0-9.]+):([0-9]{1,5})$ ]]; then red "格式有误，例如 10.240.31.2:54321"; continue; fi
+lanapply relay "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+;;
+3) lanview ;;
+4) if jq -e 'any(.inbounds[]; .tag == "lan-ss-in") or any(.outbounds[]; .tag == "lan-ss-out")' /etc/s-box/sb.json >/dev/null; then lanapply none; else green "本机未配置内网链路"; fi ;;
+0) sb; return ;;
+*) red "请选择 0-4" ;;
+esac
+done
+}
+
 clear
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 
 white "Vless-reality-vision、Hysteria2 双协议共存脚本"
@@ -1436,6 +1575,7 @@ green "11. 填写Hysteria2证书路径"
 green "12. 更换IP刷新本地IP、调整IPV4/IPV6配置输出"
 white "----------------------------------------------------------------------------------"
 green "13. Sing-box-yg脚本使用说明书"
+green "14. 内网链式代理 【选择中转/落地】"
 white "----------------------------------------------------------------------------------"
 green " 0. 退出脚本"
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -1542,7 +1682,7 @@ showprotocol
 fi
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 echo
-readp "请输入数字【0-13】:" Input
+readp "请输入数字【0-14】:" Input
 case "$Input" in  
  1 ) instsllsingbox;;
  2 ) unins;;
@@ -1557,5 +1697,6 @@ case "$Input" in
  11 ) setcert;;
  12 ) ipuuid && sbshare;;
  13 ) sbsm;;
+ 14 ) lanchain;;
   * ) exit
 esac

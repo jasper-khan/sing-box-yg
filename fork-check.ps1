@@ -84,7 +84,8 @@ if (-not $upsbyg.Success) {
   $errors += 'upsbyg() no longer reads the version file from this fork'
 }
 
-# 5) fork scope: only vless-reality + hysteria2 may remain.
+# 5) public-node scope: only vless-reality + hysteria2 may remain.
+#    Optional LAN chaining adds SS none at runtime, outside the public templates.
 #    Removed protocols must be gone, and the Argo tunnel feature must not come back.
 #    (unins/uncronsb must not reference removed-feature leftovers either: see 5b)
 $removed = [regex]::Matches($text, '(?i)\b(?:vmess|tuic|anytls)\w*|\bargo\w*|cfargo|argoym|cloudflared') | ForEach-Object { $_.Value } | Sort-Object -Unique
@@ -345,11 +346,11 @@ if (-not $flfn.Success) {
   if ($flfn.Value -notmatch '\$menu" = "5"') {
     $errors += 'changefl() lost the global-egress option (menu 3 -> 6 -> 5)'
   }
-  if ($flfn.Value -notmatch '\(\.route\.rules\[\$i\]\.outbound\)') {
+  if ($flfn.Value -notmatch '\(\.route\.rules\[-1\]\.outbound\)') {
     $errors += 'changefl() no longer writes the global egress by JSON path'
   }
-  if ($flfn.Value -notmatch '\*/sb10\.json\) gi=5') {
-    $errors += 'changefl() global egress no longer pins the sb10 fallback index to 5'
+  if ($flfn.Value -notmatch 'to_entries\[\].*has\("domain_suffix"\)') {
+    $errors += 'changefl() no longer locates domain rules independently of LAN-chain rules'
   }
 }
 
