@@ -1456,7 +1456,7 @@ if ip -4 -j addr show | jq -e --arg ip "$host" 'any(.[].addr_info[]; .local == $
 red "落地地址不能是本机地址，未做修改"; exit 1
 fi
 if ! timeout 5 bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$host" "$port" 2>/dev/null; then
-red "无法连接 $host:$port，请先在落地机启用内网入口，并检查两机内网和防火墙"; exit 1
+red "无法连接落地机 $host:$port，请先在落地机设置内网 IP 和端口，并检查两机内网和防火墙"; exit 1
 fi
 else
 red "未知机器角色，未做修改"; exit 1
@@ -1501,8 +1501,8 @@ pending=no
 green "配置已保存，原配置备份：$backup"
 [[ $running == no ]] && yellow "Sing-box 当前未运行，请从主菜单 5 启动后使用"
 case "$role" in
-landing) green "本机作为落地，SS none 仅监听内网：$host:$port"; yellow "到中转机运行 sb → 14 → 2，粘贴：$host:$port" ;;
-relay) green "本机作为中转，两种公网节点经内网连接落地：$host:$port"; yellow "客户端直接使用本机 sb → 8 的节点；域名分流在落地机设置" ;;
+landing) green "本机角色：落地\n落地机内网 IP+端口：$host:$port"; yellow "到中转机运行 sb → 14 → 2，填写上面的落地机内网 IP+端口" ;;
+relay) green "本机角色：中转\n落地机内网 IP+端口：$host:$port"; yellow "客户端直接使用本机 sb → 8 的节点；域名分流在落地机设置" ;;
 none) green "已取消本机内网链路，恢复原有节点路由" ;;
 esac
 )
@@ -1511,8 +1511,8 @@ lanview(){
 jq -r '
 ([.inbounds[] | select(.tag == "lan-ss-in")][0]) as $in |
 ([.outbounds[] | select(.tag == "lan-ss-out")][0]) as $out |
-if $in != null then "本机角色：落地\n内网入口（SS none）：\($in.listen):\($in.listen_port)"
-elif $out != null then "本机角色：中转\n落地内网地址：\($out.server):\($out.server_port)\n客户端节点：本机 sb → 8"
+if $in != null then "本机角色：落地\n落地机内网 IP+端口：\($in.listen):\($in.listen_port)"
+elif $out != null then "本机角色：中转\n落地机内网 IP+端口：\($out.server):\($out.server_port)\n客户端节点：本机 sb → 8"
 else "本机未配置内网链路" end
 ' /etc/s-box/sb.json
 }
@@ -1525,24 +1525,24 @@ for addr in /etc/s-box/sb10.json /etc/s-box/sb11.json /etc/s-box/sb.json; do
 done
 while true; do
 echo
-green "Sing-box 内网链式代理（两机之间使用 SS none）"
-yellow "1. 本机作为落地（生成内网连接地址）\n2. 本机作为中转（填写落地内网地址）\n3. 查看当前链路\n4. 取消本机链路\n0. 返回主菜单"
+green "Sing-box 内网链式代理"
+yellow "1. 本机作为落地（选择本机内网 IP 和端口）\n2. 本机作为中转（填写落地机内网 IP+端口）\n3. 查看当前链路\n4. 取消本机链路\n0. 返回主菜单"
 readp "请选择【0-4】：" choice || return
 case "$choice" in
 1)
 mapfile -t addresses < <(while read -r addr; do lanprivate "$addr" && printf '%s\n' "$addr"; done < <(ip -4 -o addr show scope global | awk '{split($4,a,"/"); print a[1]}'))
 if [[ ${#addresses[@]} == 0 ]]; then red "未找到本机内网 IPv4 地址，请先配置服务器内网"; continue; fi
 for index in "${!addresses[@]}"; do green "$((index+1)). ${addresses[$index]}"; done
-readp "选择本机内网地址编号（回车默认 1）：" index || return
+readp "选择本机（落地机）的内网 IP 编号（回车默认 1）：" index || return
 index=${index:-1}
 if [[ ! "$index" =~ ^[1-9][0-9]{0,2}$ ]] || ((index > ${#addresses[@]})); then red "地址编号无效"; continue; fi
 ip=${addresses[$((index-1))]}
 port=$(jq -r '[.inbounds[] | select(.tag == "lan-ss-in")][0].listen_port // 54321' /etc/s-box/sb.json)
-readp "内网入口端口（回车默认 $port）：" endpoint || return
+readp "落地机内网端口（回车默认 $port）：" endpoint || return
 lanapply landing "$ip" "${endpoint:-$port}"
 ;;
 2)
-readp "粘贴落地机生成的内网连接地址（IPv4:端口）：" endpoint || return
+readp "填写落地机内网 IP+端口（例如 10.240.31.2:54321）：" endpoint || return
 if [[ ! "$endpoint" =~ ^([0-9.]+):([0-9]{1,5})$ ]]; then red "格式有误，例如 10.240.31.2:54321"; continue; fi
 lanapply relay "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
 ;;
