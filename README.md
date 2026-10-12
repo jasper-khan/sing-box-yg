@@ -7,6 +7,7 @@
 * 只有两个协议：vless-reality 与 hysteria2。vmess-ws/Argo、tuic5、anytls 已从脚本中删除（服务端 inbound、客户端配置、订阅分享、菜单、端口、卸载逻辑均不含这三种协议）。
 * 支持纯 IPv4、纯 IPv6、双栈 VPS；amd64/arm64 架构；Alpine 系统下不支持查看运行日志。
 * 安装时不再询问或关闭服务器防火墙；端口确定后直接提示 VPS 防火墙/云安全组需要放行的 VLESS TCP 与 Hysteria2 UDP 入站端口。
+* 保留系统现有 DNS 管理方式：不自动安装或启用 `systemd-resolved`。同步上游 `4d5cce9`（2026-10-05）时已按此边界过滤其 DNS 服务安装改动。
 * WARP-WireGuard 出站（fork.11 起恢复）：安装时脚本用 openssl + curl 自动注册一个 Cloudflare WARP 账户（私钥 / IPv6 地址 / reserved 值），不依赖 python3、xxd；WARP-plus-Socks5、warp-plus 二进制、CFwarp 管理入口、端点 IP 优选一律不做。
 * 域名分流（菜单 `3` → `6`）：
   * `1`-`4` 号通道按域名分流 —— WARP-WireGuard-IPv4 优先 / WARP-WireGuard-IPv6 优先 / VPS 本地-IPv4 优先 / VPS 本地-IPv6 优先；填后缀域名（多个用空格分隔，回车表示该通道不分流）。

@@ -189,6 +189,11 @@ if (-not $cs.Success) {
   }
 }
 
+# 10) Preserve the host's existing DNS management: do not bootstrap systemd-resolved.
+if ($text -match '(?m)^\s*(?:apt(?:-get)?\b[^\r\n]*\binstall\b|systemctl\b[^\r\n]*\b(?:enable|start)\b)[^\r\n]*\bsystemd-resolved\b') {
+  $errors += 'automatic systemd-resolved installation/activation reappeared'
+}
+
 # 11) upstream Serv00 / web-UI / WARP-binary leftovers must stay deleted.
 $removedFiles = 'serv00.sh', 'serv00keep.sh', 'serv00.yml', 'SSH.yml', 'kp.sh', 'sb.txt', 'app.js', 'index.html', 'sversion', 'workers_keep.js', 'sbwpph_amd64', 'sbwpph_arm64', '.github/workflows/main.yml'
 $backAgain = @($removedFiles | Where-Object { Test-Path (Join-Path $PSScriptRoot $_) })
