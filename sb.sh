@@ -1550,8 +1550,8 @@ fi
 lanapply landing "$ip" "${endpoint:-$port}"
 ;;
 2)
-readp "填写落地机内网 IP+端口（例如 10.240.31.2:54321）：" endpoint || return
-if [[ ! "$endpoint" =~ ^([0-9.]+):([0-9]{1,5})$ ]]; then red "格式有误，例如 10.240.31.2:54321"; continue; fi
+readp "填写落地机内网 IP+端口（例如 192.168.1.2:54321）：" endpoint || return
+if [[ ! "$endpoint" =~ ^([0-9.]+):([0-9]{1,5})$ ]]; then red "格式有误，例如 192.168.1.2:54321"; continue; fi
 lanapply relay "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
 ;;
 3) lanview ;;
