@@ -1501,8 +1501,8 @@ pending=no
 green "配置已保存，原配置备份：$backup"
 [[ $running == no ]] && yellow "Sing-box 当前未运行，请从主菜单 5 启动后使用"
 case "$role" in
-landing) green "本机角色：落地\n落地机内网 IP+端口：$host:$port"; yellow "到中转机运行 sb → 14 → 2，填写上面的落地机内网 IP+端口" ;;
-relay) green "本机角色：中转\n落地机内网 IP+端口：$host:$port"; yellow "客户端直接使用本机 sb → 8 的节点；域名分流在落地机设置" ;;
+landing) green "本机角色：落地\n内网入口（落地机内网 IP+端口）：$host:$port"; yellow "到中转机运行 sb → 14 → 2，填写上面的落地机内网 IP+端口" ;;
+relay) green "本机角色：中转\n内网入口（落地机内网 IP+端口）：$host:$port"; yellow "客户端直接使用本机 sb → 8 的节点；域名分流在落地机设置" ;;
 none) green "已取消本机内网链路，恢复原有节点路由" ;;
 esac
 )
@@ -1511,8 +1511,8 @@ lanview(){
 jq -r '
 ([.inbounds[] | select(.tag == "lan-ss-in")][0]) as $in |
 ([.outbounds[] | select(.tag == "lan-ss-out")][0]) as $out |
-if $in != null then "本机角色：落地\n落地机内网 IP+端口：\($in.listen):\($in.listen_port)"
-elif $out != null then "本机角色：中转\n落地机内网 IP+端口：\($out.server):\($out.server_port)\n客户端节点：本机 sb → 8"
+if $in != null then "本机角色：落地\n内网入口（落地机内网 IP+端口）：\($in.listen):\($in.listen_port)"
+elif $out != null then "本机角色：中转\n内网入口（落地机内网 IP+端口）：\($out.server):\($out.server_port)\n客户端节点：本机 sb → 8"
 else "本机未配置内网链路" end
 ' /etc/s-box/sb.json
 }
