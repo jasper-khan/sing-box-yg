@@ -363,6 +363,14 @@ if ($text -notmatch '\|\s*debconf-set-selections') {
   $errors += 'iptables-persistent install answers are no longer preseeded'
 }
 
+# 20) Optional realm management stays separate from node configuration and firewall control.
+$realm = [regex]::Match($text, '(?ms)^realm_bin=/usr/local/bin/realm\r?\n.*?(?=^clear\r?$)')
+if (-not $realm.Success -or $text -notmatch '(?m)^\s*14\s*\)\s*realm_menu;;') {
+  $errors += 'optional realm management menu is missing'
+} elseif ($realm.Value -match '/etc/s-box/|(?m)^\s*(?:iptables|ip6tables|nft|ufw)\b|systemctl[^\r\n]*\bsing-box\b|(?m)^\s*restartsb\b') {
+  $errors += 'realm management started changing existing nodes or firewall rules'
+}
+
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1
