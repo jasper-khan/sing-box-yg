@@ -1368,7 +1368,7 @@ fi
 }
 
 sbshare(){
-: > /etc/s-box/jhdy.txt
+rm -rf /etc/s-box/{jhdy,vl_reality,hy2}.txt
 result_vl_hy2 && resvless && reshy2
 cat /etc/s-box/vl_reality.txt 2>/dev/null >> /etc/s-box/jhdy.txt
 cat /etc/s-box/hy2.txt 2>/dev/null >> /etc/s-box/jhdy.txt
@@ -1384,15 +1384,8 @@ echo
 }
 
 clash_sb_share(){
-if [[ -f /etc/s-box/sb.json ]]; then
-white "【本机直连节点】"
+sbactive
 sbshare
-fi
-if realm_managed; then
-realm_show_nodes
-elif [[ ! -f /etc/s-box/sb.json ]]; then
-yellow "当前没有本机节点或 realm 中转规则"
-fi
 }
 
 bbr(){
@@ -1422,339 +1415,6 @@ blue "项目地址与使用说明：https://github.com/jasper-khan/sing-box-yg"
 echo
 }
 
-realm_bin=/usr/local/bin/realm
-realm_config=/etc/realm/config.json
-realm_nodes=/etc/realm/node-links.json
-realm_unit=/etc/systemd/system/realm.service
-realm_marker='# Managed by sing-box-yg realm manager'
-realm_exec='ExecStart=/usr/local/bin/realm -c /etc/realm/config.json'
-
-realm_supported(){
-if [[ $(uname -s) != Linux ]] || ! command -v systemctl >/dev/null 2>&1; then
-yellow "realm 管理仅支持使用 systemd 的 Linux 系统"
-return 1
-fi
-case $(uname -m) in
-x86_64|aarch64) ;;
-*) yellow "realm 管理目前仅支持 x86_64 和 aarch64，当前架构：$(uname -m)"; return 1 ;;
-esac
-}
-
-realm_managed(){
-[[ -f $realm_unit && ! -L $realm_unit ]] && grep -Fxq "$realm_marker" "$realm_unit" && grep -Fxq "$realm_exec" "$realm_unit"
-}
-
-realm_ready(){
-realm_supported || return 1
-if ! realm_managed; then yellow "未找到本脚本管理的 realm.service，请先选择安装"; return 1; fi
-if [[ ! -x $realm_bin ]]; then yellow "realm 程序不存在，请先选择安装"; return 1; fi
-if [[ -L /etc/realm || ! -f $realm_config || -L $realm_config ]] || ! jq -e 'type == "object" and (.endpoints | type == "array")' "$realm_config" >/dev/null 2>&1; then
-yellow "realm 配置不存在或格式无效，请先检查 $realm_config"
-return 1
-fi
-}
-
-realm_install_cleanup(){
-[[ -n $1 ]] && rm -f "$1"
-[[ -n $2 ]] && rm -f "$2"
-[[ -n $3 ]] && rm -f "$3"
-return 0
-}
-
-realm_install(){
-realm_supported || return 1
-local cmd missing=0 arch asset api archive staging digest url actual config_tmp unit_tmp service_state was_active=0 backup backup_tmp rollback_tmp restart_ok
-for cmd in curl jq tar sha256sum mktemp; do
-if ! command -v "$cmd" >/dev/null 2>&1; then yellow "缺少依赖：$cmd"; missing=1; fi
-done
-(( missing == 0 )) || return 1
-if [[ -L $realm_unit ]] || { [[ -e $realm_unit ]] && ! realm_managed; }; then yellow "已存在其他 realm.service，未覆盖"; return 1; fi
-if [[ -L $realm_config ]]; then yellow "realm 配置是符号链接，未覆盖"; return 1; fi
-if [[ -e $realm_config && ! -f $realm_unit ]]; then yellow "已存在 $realm_config，但没有本脚本管理的服务，未覆盖"; return 1; fi
-if [[ -e $realm_bin && ! -f $realm_unit ]]; then yellow "已存在 $realm_bin，但没有本脚本管理的服务，未覆盖"; return 1; fi
-if [[ -L $realm_bin || ( -e $realm_bin && ! -f $realm_bin ) ]]; then yellow "realm 程序不是普通文件，未覆盖"; return 1; fi
-if [[ -e $realm_config ]] && ! jq -e 'type == "object" and (.endpoints | type == "array")' "$realm_config" >/dev/null 2>&1; then
-yellow "现有 realm 配置格式无效，未覆盖"
-return 1
-fi
-if [[ -L $realm_bin.bak || ( -e $realm_bin.bak && ! -f $realm_bin.bak ) ]]; then yellow "realm 程序备份路径已被占用，未覆盖"; return 1; fi
-if realm_managed; then
-service_state=$(systemctl is-active realm.service 2>/dev/null || true)
-case $service_state in active) was_active=1;; inactive|failed) was_active=0;; *) yellow "realm 服务状态异常：$service_state"; return 1;; esac
-fi
-case $(uname -m) in x86_64) arch=x86_64;; aarch64) arch=aarch64;; esac
-asset="realm-slim-$arch-unknown-linux-musl.tar.gz"
-api=$(mktemp) && archive=$(mktemp) && staging=$(mktemp /usr/local/bin/.realm.new.XXXXXX) || { realm_install_cleanup "$api" "$archive" "$staging"; return 1; }
-if ! curl -fsSL --retry 2 --connect-timeout 10 --max-time 120 https://api.github.com/repos/zhboner/realm/releases/latest -o "$api"; then
-yellow "读取 realm 官方发行信息失败"; realm_install_cleanup "$api" "$archive" "$staging"; return 1
-fi
-digest=$(jq -r --arg n "$asset" '.assets[]? | select(.name == $n) | .digest // empty' "$api" | head -n1)
-url=$(jq -r --arg n "$asset" '.assets[]? | select(.name == $n) | .browser_download_url // empty' "$api" | head -n1)
-if [[ ! $digest =~ ^sha256:[0-9a-f]{64}$ || $url != https://github.com/zhboner/realm/releases/download/* ]]; then
-yellow "官方发行信息中缺少有效的 $asset 或 SHA256"; realm_install_cleanup "$api" "$archive" "$staging"; return 1
-fi
-if ! curl -fsSL --retry 2 --connect-timeout 10 --max-time 120 "$url" -o "$archive"; then
-yellow "下载 realm 失败，原有程序未改动"; realm_install_cleanup "$api" "$archive" "$staging"; return 1
-fi
-actual=$(sha256sum "$archive" | awk '{print $1}')
-if [[ $actual != ${digest#sha256:} ]] || ! tar -tzf "$archive" | grep -Fxq realm-slim || ! tar -xzOf "$archive" realm-slim > "$staging" || [[ ! -s $staging ]]; then
-yellow "realm 安装包校验或解包失败，原有程序未改动"; realm_install_cleanup "$api" "$archive" "$staging"; return 1
-fi
-if ! chmod 755 "$staging" || ! "$staging" --version >/dev/null 2>&1; then yellow "realm 程序自检失败，原有程序未改动"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; fi
-if [[ -L /etc/realm || ( -e /etc/realm && ! -d /etc/realm ) ]]; then yellow "/etc/realm 不是普通目录，未覆盖"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; fi
-if [[ ! -d /etc/realm ]]; then mkdir -m 755 /etc/realm || { yellow "创建 /etc/realm 失败"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; }; fi
-if [[ ! -e $realm_unit ]]; then
-unit_tmp=$(mktemp /etc/systemd/system/realm.service.tmp.XXXXXX) || { realm_install_cleanup "$api" "$archive" "$staging"; return 1; }
-if ! cat > "$unit_tmp" <<EOF
-$realm_marker
-[Unit]
-Description=Realm TCP/UDP port forwarder
-After=network-online.target
-Wants=network-online.target
-[Service]
-Type=simple
-User=nobody
-NoNewPrivileges=true
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-$realm_exec
-Restart=on-failure
-RestartSec=2s
-[Install]
-WantedBy=multi-user.target
-EOF
-then rm -f "$unit_tmp"; yellow "写入 realm.service 失败"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; fi
-chmod 644 "$unit_tmp" && mv -f "$unit_tmp" "$realm_unit" || { rm -f "$unit_tmp"; yellow "创建 realm.service 失败"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; }
-fi
-systemctl daemon-reload || { yellow "systemd 重新载入失败，请检查 realm.service"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; }
-if [[ ! -f $realm_config ]]; then
-config_tmp=$(mktemp /etc/realm/config.json.tmp.XXXXXX) || { realm_install_cleanup "$api" "$archive" "$staging"; return 1; }
-printf '{"log":{"level":"warn"},"endpoints":[]}\n' > "$config_tmp" && chmod 644 "$config_tmp" && mv -f "$config_tmp" "$realm_config" || { rm -f "$config_tmp"; yellow "创建 realm 配置失败"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; }
-fi
-backup=$realm_bin.bak
-if [[ -e $realm_bin ]]; then
-if [[ -L $realm_bin || ! -f $realm_bin ]]; then yellow "realm 程序不是普通文件，未覆盖"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; fi
-backup_tmp=$(mktemp /usr/local/bin/.realm.bak.XXXXXX) || { realm_install_cleanup "$api" "$archive" "$staging"; return 1; }
-if ! cp -p "$realm_bin" "$backup_tmp" || ! mv -f "$backup_tmp" "$backup"; then rm -f "$backup_tmp"; yellow "备份原 realm 程序失败，未覆盖"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; fi
-backup_tmp=
-fi
-if ! mv -f "$staging" "$realm_bin"; then yellow "安装 realm 程序失败，原有程序未改动"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; fi
-staging=
-if (( was_active == 1 )); then
-restart_ok=1
-if systemctl restart realm.service; then sleep 1; systemctl is-active --quiet realm.service || restart_ok=0; else restart_ok=0; fi
-if (( restart_ok == 0 )); then
-if [[ -f $backup ]]; then
-rollback_tmp=$(mktemp /usr/local/bin/.realm.rollback.XXXXXX) || { systemctl stop realm.service >/dev/null 2>&1; red "新版本启动失败，无法准备旧版回滚文件；realm 已停止"; realm_install_cleanup "$api" "$archive" "$staging"; return 1; }
-if cp -p "$backup" "$rollback_tmp" && mv -f "$rollback_tmp" "$realm_bin"; then
-if systemctl restart realm.service; then
-sleep 1
-if systemctl is-active --quiet realm.service; then yellow "新版本启动失败，已恢复旧版 realm"; else systemctl stop realm.service >/dev/null 2>&1; red "旧版程序已恢复，但服务未能启动，realm 已停止"; fi
-else systemctl stop realm.service >/dev/null 2>&1; red "旧版程序已恢复，但重启服务失败，realm 已停止"; fi
-else rm -f "$rollback_tmp"; systemctl stop realm.service >/dev/null 2>&1; red "恢复旧版 realm 程序失败，realm 已停止；请检查 $backup"; fi
-else systemctl stop realm.service >/dev/null 2>&1; red "新版本启动失败且没有旧版程序可回滚；realm 已停止"; fi
-realm_install_cleanup "$api" "$archive" "$staging"; return 1
-fi
-fi
-realm_install_cleanup "$api" "$archive" "$staging"
-green "realm 已安装或升级。请自行在防火墙放行入口端口。"
-}
-
-realm_list(){
-realm_ready || return 1
-if ! jq -r 'if (.endpoints | length) == 0 then "当前没有转发规则" else .endpoints | to_entries[] | "\(.key + 1). \(if .value.network.no_tcp then "UDP" elif .value.network.use_udp then "TCP+UDP" else "TCP" end)  \(.value.listen) → \(.value.remote)" end' "$realm_config"; then
-yellow "读取 realm 规则失败"; return 1
-fi
-}
-
-realm_valid_port(){
-[[ $1 =~ ^[0-9]{1,5}$ ]] || return 1
-local p=$((10#$1))
-(( p >= 1 && p <= 65535 )) || return 1
-printf '%s\n' "$p"
-}
-
-realm_valid_ipv4(){
-[[ $1 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
-local IFS=. part value octets=() normalized=()
-read -r -a octets <<< "$1"
-[[ ${#octets[@]} -eq 4 ]] || return 1
-for part in "${octets[@]}"; do
-value=$((10#$part))
-(( value <= 255 )) || return 1
-normalized+=("$value")
-done
-printf '%s.%s.%s.%s\n' "${normalized[0]}" "${normalized[1]}" "${normalized[2]}" "${normalized[3]}"
-}
-
-realm_commit(){
-local new_config=$1 count active enabled rollback=0
-realm_ready || return 1
-count=$(jq '.endpoints | length' "$new_config") || return 1
-active=$(systemctl is-active realm.service 2>/dev/null || true)
-enabled=$(systemctl is-enabled realm.service 2>/dev/null || true)
-if [[ ( $active != active && $active != inactive ) || ( $enabled != enabled && $enabled != disabled ) || ( -e $realm_config.bak && ( -L $realm_config.bak || ! -f $realm_config.bak ) ) ]]; then
-yellow "realm 服务或备份状态异常，未应用规则"; return 1
-fi
-cp -p "$realm_config" "$realm_config.bak" || { yellow "备份 realm 配置失败"; return 1; }
-chmod --reference="$realm_config" "$new_config" 2>/dev/null || chmod 600 "$new_config"
-if ! mv -f "$new_config" "$realm_config"; then yellow "更新 realm 配置失败"; return 1; fi
-if (( count > 0 )); then
-if systemctl enable realm.service >/dev/null 2>&1 && { if [[ $active == active ]]; then systemctl restart realm.service; else systemctl start realm.service; fi; }; then
-sleep 1
-if systemctl is-active --quiet realm.service; then green "realm 规则已应用，服务运行中"; return 0; fi
-fi
-else
-if systemctl stop realm.service && systemctl disable realm.service >/dev/null 2>&1 && [[ $(systemctl is-active realm.service 2>/dev/null || true) != active ]]; then
-green "最后一条规则已删除，realm 服务已停止并禁用"; return 0
-fi
-fi
-yellow "应用规则失败，正在恢复原配置和服务状态"
-if ! cp -p "$realm_config.bak" "$realm_config"; then systemctl stop realm.service >/dev/null 2>&1; red "配置回滚失败，realm 已停止；请从 $realm_config.bak 手动恢复"; return 1; fi
-if [[ $enabled == enabled ]]; then systemctl enable realm.service >/dev/null 2>&1 || rollback=1; else systemctl disable realm.service >/dev/null 2>&1 || rollback=1; fi
-if [[ $active == active ]]; then if systemctl restart realm.service; then sleep 1; systemctl is-active --quiet realm.service || rollback=1; else rollback=1; fi; else systemctl stop realm.service || rollback=1; fi
-if (( rollback == 0 )); then yellow "已恢复原配置和服务状态"; else red "配置已恢复，但服务状态恢复失败，请检查 realm.service"; fi
-return 1
-}
-
-realm_add(){
-[[ $# -eq 4 ]] || { yellow "用法：realm_add <tcp|udp> <入口端口> <落地IPv4> <落地端口>"; return 1; }
-realm_ready || return 1
-command -v ss >/dev/null 2>&1 || { yellow "缺少依赖：ss"; return 1; }
-local proto=$1 listen remote_ip remote_port no_tcp use_udp occupied tmp
-[[ $proto == tcp || $proto == udp ]] || { yellow "协议仅支持 tcp 或 udp"; return 1; }
-listen=$(realm_valid_port "$2") || { yellow "入口端口必须是 1-65535"; return 1; }
-remote_ip=$(realm_valid_ipv4 "$3") || { yellow "落地地址必须是有效 IPv4 地址"; return 1; }
-remote_port=$(realm_valid_port "$4") || { yellow "落地端口必须是 1-65535"; return 1; }
-local duplicate
-duplicate=$(jq --arg p "$listen" --arg proto "$proto" 'any(.endpoints[]; (.listen | split(":") | last) == $p and (if $proto == "tcp" then (.network.no_tcp != true) else (.network.use_udp == true) end))' "$realm_config") || { yellow "检查 realm 现有规则失败"; return 1; }
-[[ $duplicate == true ]] && { yellow "相同协议的入口端口已配置"; return 1; }
-if [[ $proto == tcp ]]; then occupied=$(ss -H -lnt "sport = :$listen" 2>/dev/null) || { yellow "ss 检查 TCP 端口失败，已停止添加"; return 1; }; no_tcp=false; use_udp=false
-else occupied=$(ss -H -lnu "sport = :$listen" 2>/dev/null) || { yellow "ss 检查 UDP 端口失败，已停止添加"; return 1; }; no_tcp=true; use_udp=true
-fi
-[[ -z $occupied ]] || { yellow "入口端口已被占用：$listen/$proto"; return 1; }
-tmp=$(mktemp /etc/realm/config.json.tmp.XXXXXX) || return 1
-if ! jq --arg listen "0.0.0.0:$listen" --arg remote "$remote_ip:$remote_port" --argjson no_tcp "$no_tcp" --argjson use_udp "$use_udp" '.endpoints += [{listen:$listen,remote:$remote,network:{no_tcp:$no_tcp,use_udp:$use_udp}}]' "$realm_config" > "$tmp"; then
-rm -f "$tmp"; yellow "生成 realm 配置失败"; return 1
-fi
-realm_commit "$tmp" || { rm -f "$tmp"; return 1; }
-yellow "如启用了 UFW 或其他防火墙，请自行放行入口 $listen/$proto"
-}
-
-realm_delete(){
-[[ $# -eq 1 && $1 =~ ^[0-9]{1,6}$ ]] || { yellow "请输入有效的规则序号"; return 1; }
-realm_ready || return 1
-local index=$((10#$1)) count tmp
-count=$(jq '.endpoints | length' "$realm_config") || return 1
-(( index >= 1 && index <= count )) || { yellow "规则序号超出范围"; return 1; }
-tmp=$(mktemp /etc/realm/config.json.tmp.XXXXXX) || return 1
-if ! jq --argjson i "$index" 'del(.endpoints[$i - 1])' "$realm_config" > "$tmp"; then
-rm -f "$tmp"; yellow "生成 realm 配置失败"; return 1
-fi
-realm_commit "$tmp" || { rm -f "$tmp"; return 1; }
-realm_prune_nodes || yellow "转发规则已删除，但清理节点链接失败，请检查 $realm_nodes"
-}
-
-realm_read_nodes(){
-if [[ -L $realm_nodes || ( -e $realm_nodes && ! -f $realm_nodes ) ]]; then yellow "节点链接文件不是普通文件，未读取或覆盖" >&2; return 1; fi
-if [[ ! -e $realm_nodes ]]; then printf '{"nodes":[]}\n'; return; fi
-if ! jq -e 'type == "object" and (.nodes | type == "array") and all(.nodes[]; (.listen | type == "string") and (.remote | type == "string") and (.protocol == "tcp" or .protocol == "udp") and (.link | type == "string"))' "$realm_nodes" >/dev/null 2>&1; then
-yellow "节点链接文件格式无效，未覆盖" >&2; return 1
-fi
-cat "$realm_nodes"
-}
-
-realm_prune_nodes(){
-[[ -e $realm_nodes || -L $realm_nodes ]] || return 0
-local data tmp
-data=$(realm_read_nodes) || return 1
-tmp=$(mktemp "$realm_nodes.tmp.XXXXXX") || return 1
-if ! printf '%s' "$data" | jq --slurpfile config "$realm_config" '.nodes |= map(. as $n | select(any($config[0].endpoints[]; .listen == $n.listen and .remote == $n.remote and (if $n.protocol == "tcp" then .network.no_tcp != true else .network.use_udp == true end))))' > "$tmp" || ! chmod 600 "$tmp" || ! mv -f "$tmp" "$realm_nodes"; then
-rm -f "$tmp"; yellow "清理节点链接失败"; return 1
-fi
-}
-
-realm_bind_node(){
-[[ $# -eq 3 && $1 =~ ^[0-9]{1,6}$ ]] || { yellow "请输入有效的规则序号"; return 1; }
-realm_ready || return 1
-local index=$((10#$1)) host=$2 link=$3 endpoint parsed port protocol query name converted data tmp
-(( index >= 1 )) || { yellow "规则序号超出范围"; return 1; }
-endpoint=$(jq -ce --argjson i "$index" '.endpoints[$i - 1] // empty' "$realm_config") || { yellow "规则序号超出范围"; return 1; }
-if [[ ! $host =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ && ! $host =~ ^\[[0-9a-fA-F:]+\]$ ]]; then yellow "中转地址请填写公网 IP 或域名；IPv6 使用 [地址]，不含端口"; return 1; fi
-parsed=$(printf '%s' "$link" | jq -Rsce 'select(test("[[:cntrl:]]") | not) | capture("^(?<scheme>vless|hysteria2|hy2)://(?<auth>[^/?#]+)@(?<host>\\[[^]]+\\]|[^:/?#]+):(?<port>[0-9]+)(?<query>\\?[^#]*)?(?:#(?<name>.*))?$")' 2>/dev/null) || { yellow "请粘贴完整的落地 VLESS 或 Hysteria2 分享链接"; return 1; }
-port=$(realm_valid_port "$(jq -r '.port' <<< "$parsed")") || { yellow "落地节点端口无效"; return 1; }
-[[ $port == "$(jq -r '.remote | split(":") | last' <<< "$endpoint")" ]] || { yellow "节点端口与这条转发规则的落地端口不同"; return 1; }
-if [[ $(jq -r '.scheme' <<< "$parsed") == vless ]]; then protocol=tcp; else protocol=udp; fi
-if ! jq -e --arg p "$protocol" 'if $p == "tcp" then .network.no_tcp != true else .network.use_udp == true end' <<< "$endpoint" >/dev/null; then yellow "节点协议与转发规则不匹配：VLESS 需要 TCP，Hysteria2 需要 UDP"; return 1; fi
-query=$(jq -r '(.query // "" | ltrimstr("?")) | split("&") | map(select((split("=")[0] | ascii_downcase) != "mport")) | join("&")' <<< "$parsed") || return 1
-if [[ $protocol == udp && ! $(printf '%s' "$query" | tr '&' '\n') =~ (^|$'\n')sni= ]]; then
-query="${query:+$query&}sni=$(jq -r '.host | ltrimstr("[") | rtrimstr("]") | @uri' <<< "$parsed")"
-fi
-name=$(jq -r '.name // .scheme' <<< "$parsed")
-converted="$(jq -r '.scheme + "://" + .auth + "@"' <<< "$parsed")$host:$(jq -r '.listen | split(":") | last' <<< "$endpoint")${query:+?$query}#$name%20%5B%E5%86%85%E7%BD%91%E4%B8%AD%E8%BD%AC%5D"
-data=$(realm_read_nodes) || return 1
-tmp=$(mktemp "$realm_nodes.tmp.XXXXXX") || return 1
-if ! printf '%s' "$data" | jq --argjson e "$endpoint" --arg p "$protocol" --arg link "$converted" '.nodes = [.nodes[] | select(.listen != $e.listen or .remote != $e.remote or .protocol != $p)] + [{listen:$e.listen,remote:$e.remote,protocol:$p,link:$link}]' > "$tmp" || ! chmod 600 "$tmp" || ! mv -f "$tmp" "$realm_nodes"; then
-rm -f "$tmp"; yellow "保存中转节点失败"; return 1
-fi
-green "中转节点已保存，主菜单 8 可直接复制；认证、TLS 和混淆参数沿用落地节点"
-}
-
-realm_show_nodes(){
-realm_ready || return 1
-local data links
-data=$(realm_read_nodes) || return 1
-links=$(printf '%s' "$data" | jq -r --slurpfile config "$realm_config" '.nodes[] | . as $n | select(any($config[0].endpoints[]; .listen == $n.listen and .remote == $n.remote and (if $n.protocol == "tcp" then .network.no_tcp != true else .network.use_udp == true end))) | .link') || return 1
-white "【realm 内网中转节点】"
-if [[ -z $links ]]; then yellow "尚未绑定落地节点链接，请在菜单 14 → 10 设置"; return 0; fi
-if ! systemctl is-active --quiet realm.service; then yellow "realm 当前未运行，请先在菜单 14 启动服务"; fi
-printf '%s\n' "$links"
-}
-
-realm_node_menu(){
-realm_list || return 1
-local index host link
-readp "绑定规则序号：" index || return
-readp "中转公网 IP 或域名（IPv6 使用 [地址]）：" host || return
-IFS= read -r -p "$(yellow '粘贴落地机菜单 8 的单条节点链接：')" link || return
-realm_bind_node "$index" "$host" "$link"
-}
-
-realm_menu(){
-realm_supported || return 1
-local choice proto listen remote_ip remote_port index
-while true; do
-echo
-white "realm 内网端口转发管理"
-echo "1. 安装 realm（仅首次安装或升级时下载）"
-echo "2. 查看转发规则"
-echo "3. 添加 TCP/UDP 转发规则"
-echo "4. 删除转发规则"
-echo "5. 启动 realm"
-echo "6. 停止 realm"
-echo "7. 重启 realm"
-echo "8. 查看服务状态"
-echo "9. 查看最近日志"
-echo "10. 绑定落地节点链接（主菜单 8 导出中转节点）"
-echo "0. 返回主菜单"
-readp "请选择【0-10】：" choice || return
-case $choice in
-1) realm_install ;;
-2) realm_list ;;
-3) readp "协议【tcp/udp】：" proto || return; readp "入口端口：" listen || return; readp "落地 IPv4：" remote_ip || return; readp "落地端口：" remote_port || return; realm_add "$proto" "$listen" "$remote_ip" "$remote_port" ;;
-4) if realm_list; then readp "删除规则序号：" index || return; realm_delete "$index"; fi ;;
-5) if realm_ready; then if [[ $(jq '.endpoints | length' "$realm_config") -gt 0 ]]; then if systemctl enable --now realm.service; then sleep 1; systemctl is-active --quiet realm.service || yellow "realm 启动未成功"; else yellow "realm 启动失败"; fi; else yellow "请先添加转发规则"; fi; fi ;;
-6) realm_ready && systemctl stop realm.service ;;
-7) if realm_ready; then if [[ $(jq '.endpoints | length' "$realm_config") -gt 0 ]]; then if systemctl restart realm.service; then sleep 1; systemctl is-active --quiet realm.service || yellow "realm 重启未成功"; else yellow "realm 重启失败"; fi; else yellow "请先添加转发规则"; fi; fi ;;
-8) realm_ready && systemctl status --no-pager --full realm.service ;;
-9) if realm_ready; then if command -v journalctl >/dev/null 2>&1; then journalctl -u realm.service -n 50 --no-pager; else yellow "journalctl 不可用"; fi; fi ;;
-10) realm_node_menu ;;
-0) if command -v sb >/dev/null 2>&1; then sb; return; else exit; fi ;;
-*) yellow "无效选项" ;;
-esac
-done
-}
-
 clear
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 
 white "Vless-reality-vision、Hysteria2 双协议共存脚本"
@@ -1776,7 +1436,6 @@ green "11. 填写Hysteria2证书路径"
 green "12. 更换IP刷新本地IP、调整IPV4/IPV6配置输出"
 white "----------------------------------------------------------------------------------"
 green "13. Sing-box-yg脚本使用说明书"
-green "14. realm 内网端口转发管理（可选）"
 white "----------------------------------------------------------------------------------"
 green " 0. 退出脚本"
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -1792,7 +1451,7 @@ echo -e "${yellow}$(curl -sL https://raw.githubusercontent.com/jasper-khan/sing-
 fi
 else
 echo -e "当前 Sing-box-yg 脚本版本号：${bblue}${latestV}${plain}"
-yellow "未安装 Sing-box-yg 节点；可选 1 安装节点或 14 管理 realm 转发"
+yellow "未安装 Sing-box-yg 脚本！请先选择 1 安装"
 fi
 
 lapre
@@ -1883,7 +1542,7 @@ showprotocol
 fi
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 echo
-readp "请输入数字【0-14】:" Input
+readp "请输入数字【0-13】:" Input
 case "$Input" in  
  1 ) instsllsingbox;;
  2 ) unins;;
@@ -1898,6 +1557,5 @@ case "$Input" in
  11 ) setcert;;
  12 ) ipuuid && sbshare;;
  13 ) sbsm;;
- 14 ) realm_menu;;
   * ) exit
 esac
