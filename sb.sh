@@ -1103,8 +1103,8 @@ mapfile -t fldomains < <(jq -r '.route.rules[] | select(has("domain_suffix") and
 fln=("WARP-WireGuard-IPv4优先" "WARP-WireGuard-IPv6优先" "VPS本地-IPv4优先" "VPS本地-IPv6优先")
 echo
 blue "对所有协议进行统一的域名分流 (后缀域名方式，双栈优先模式)"
-if jq -e 'any(.outbounds[]; .tag == "lan-ss-out")' /etc/s-box/sb.json >/dev/null; then
-yellow "本机已作为内网中转，公网节点流量交给落地机；这条链路的域名分流请在落地机设置"
+if jq -e 'any(.outbounds[]; .tag == "lan-ss-out" or .tag == "public-vless-out")' /etc/s-box/sb.json >/dev/null; then
+yellow "本机已作为中转，公网节点流量交给落地机；这条链路的域名分流请在落地机设置"
 fi
 green "当前分流域名如下："
 for i in 0 1 2 3; do
@@ -1439,9 +1439,36 @@ lanrestart(){
 if command -v apk >/dev/null 2>&1; then rc-service sing-box restart; else systemctl restart sing-box; fi
 }
 
+publicnode(){
+printf '%s\n' "$1" | jq -Rce '
+gsub("^\\s+|\\s+$"; "") |
+capture("^vless://(?<uuid>[0-9a-fA-F-]+)@(?<host>\\[[0-9a-fA-F:.]+\\]|[A-Za-z0-9.-]+):(?<port>[0-9]{1,5})\\?(?<query>[^#]+)(#.*)?$") as $uri |
+($uri.query | split("&") | map(capture("^(?<key>[A-Za-z][A-Za-z0-9]*)=(?<value>[^=]*)$"))) as $params |
+select(($params | map(.key) | unique | length) == ($params | length)) |
+($params | from_entries) as $p |
+select($p.encryption == "none" and $p.security == "reality" and $p.type == "tcp" and $p.flow == "xtls-rprx-vision" and ($p.headerType // "none") == "none") |
+select($uri.uuid | test("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) |
+select(($uri.port | tonumber) >= 1 and ($uri.port | tonumber) <= 65535) |
+select(($p.sni // "") | test("^[A-Za-z0-9.-]+$")) |
+select(($p.pbk // "") | test("^[A-Za-z0-9_-]{43}$")) |
+select(($p.sid // "invalid") | test("^([0-9a-fA-F]{2}){0,8}$")) |
+select(($p.fp // "") | test("^[a-z0-9]+$")) |
+{type:"vless", tag:"public-vless-out", server:($uri.host | ltrimstr("[") | rtrimstr("]")), server_port:($uri.port | tonumber), uuid:$uri.uuid,
+flow:$p.flow, packet_encoding:"xudp", tls:{enabled:true, server_name:$p.sni, utls:{enabled:true, fingerprint:$p.fp}, reality:{enabled:true, public_key:$p.pbk, short_id:$p.sid}}}
+' 2>/dev/null
+}
+
 lanapply()(
 role=$1; host=${2:-}; port=${3:-0}
-if [[ "$role" != none ]]; then
+outbound='{}'
+if [[ "$role" == public ]]; then
+outbound=$(publicnode "$host") || { red "链接格式不支持，请从落地机 sb → 8 复制本 fork 的 VLESS+Reality 完整链接，未做修改"; exit 1; }
+host=$(printf '%s\n' "$outbound" | jq -r '.server')
+port=$(printf '%s\n' "$outbound" | jq -r '.server_port')
+if ip -j addr show | jq -e --arg ip "$host" 'any(.[].addr_info[]; .local == $ip)' >/dev/null || [[ "$host" == "$(cat /etc/s-box/server_ip.log 2>/dev/null | tr -d '[]\r\n')" ]]; then
+red "落地地址不能是本机地址，请粘贴落地机的节点链接，未做修改"; exit 1
+fi
+elif [[ "$role" != none ]]; then
 if ! lanprivate "$host" || [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
 red "请填写有效的内网 IPv4 地址和 1-65535 端口，未做修改"; exit 1
 fi
@@ -1464,31 +1491,56 @@ fi
 fi
 umask 077
 backup=$(mktemp -d /etc/s-box/lan-chain-backup.XXXXXX) || exit 1
+pending=no; running=no; probe_pid=
+trap 'if [[ -n $probe_pid ]]; then kill "$probe_pid" 2>/dev/null; wait "$probe_pid" 2>/dev/null; fi
+if [[ $pending == yes ]]; then
+for name in sb10 sb11 sb; do cp -p "$backup/$name.json" "/etc/s-box/$name.json"; done
+[[ $running == yes ]] && lanrestart > "$backup/restore.log" 2>&1
+red "应用失败，已恢复原配置。备份及日志：$backup"
+fi' EXIT
+trap 'exit 1' HUP INT TERM
+printf '%s\n' "$outbound" > "$backup/outbound.json" || exit 1
 for name in sb10 sb11 sb; do
 cp -p "/etc/s-box/$name.json" "$backup/$name.json" || exit 1
-jq --arg role "$role" --arg host "$host" --argjson port "$port" '
+jq --arg role "$role" --arg host "$host" --argjson port "$port" --slurpfile public "$backup/outbound.json" '
 .inbounds |= map(select(.tag != "lan-ss-in")) |
-.outbounds |= map(select(.tag != "lan-ss-out")) |
-.route.rules |= map(select(.outbound != "lan-ss-out")) |
+.outbounds |= map(select(.tag != "lan-ss-out" and .tag != "public-vless-out")) |
+.route.rules |= map(select(.outbound != "lan-ss-out" and .outbound != "public-vless-out")) |
 if $role == "landing" then
 .inbounds += [{type:"shadowsocks", tag:"lan-ss-in", listen:$host, listen_port:$port, method:"none", password:""}]
-elif $role == "relay" then
-.outbounds += [{type:"shadowsocks", tag:"lan-ss-out", server:$host, server_port:$port, method:"none", password:""}] |
-.route.rules = [{inbound:[.inbounds[] | select(.type == "vless" or .type == "hysteria2") | .tag], outbound:"lan-ss-out"}] + .route.rules
+elif $role == "relay" or $role == "public" then
+(if $role == "public" then $public[0] else {type:"shadowsocks", tag:"lan-ss-out", server:$host, server_port:$port, method:"none", password:""} end) as $out |
+.outbounds += [$out] |
+.route.rules = [{inbound:[.inbounds[] | select(.type == "vless" or .type == "hysteria2") | .tag], outbound:$out.tag}] + .route.rules
 else . end
 ' "$backup/$name.json" > "$backup/$name.new.json" || exit 1
 done
 if ! /etc/s-box/sing-box check -c "$backup/sb.new.json" > "$backup/check.log" 2>&1; then
 red "配置检查失败，现有配置未改动。检查日志：$backup/check.log"; exit 1
 fi
+if [[ "$role" == public ]]; then
+while true; do
+probe_port=$(shuf -i 10000-65535 -n 1)
+[[ -z $(ss -H -lntu "sport = :$probe_port") ]] && break
+done
+jq -n --argjson p "$probe_port" --slurpfile public "$backup/outbound.json" '
+{log:{level:"error"}, inbounds:[{type:"mixed", listen:"127.0.0.1", listen_port:$p}], outbounds:$public, route:{final:$public[0].tag}}
+' > "$backup/probe.json" || exit 1
+/etc/s-box/sing-box run -c "$backup/probe.json" > "$backup/probe.log" 2>&1 &
+probe_pid=$!
+sleep 1
+probe_ok=no
+curl -fsS --noproxy "" --socks5-hostname "127.0.0.1:$probe_port" --connect-timeout 5 --max-time 15 https://api.ipify.org -o /dev/null 2>> "$backup/probe.log" && probe_ok=yes
+kill "$probe_pid" 2>/dev/null || true
+wait "$probe_pid" 2>/dev/null || true
+probe_pid=
+rm -f "$backup/probe.json"
+if [[ $probe_ok != yes ]]; then
+red "落地节点连接验证失败，现有链路未改动。请核对落地链接及两机公网连接。日志：$backup/probe.log"; exit 1
+fi
+fi
 running=no; lanrunning && running=yes
 pending=yes
-trap 'if [[ $pending == yes ]]; then
-for name in sb10 sb11 sb; do cp -p "$backup/$name.json" "/etc/s-box/$name.json"; done
-[[ $running == yes ]] && lanrestart > "$backup/restore.log" 2>&1
-red "应用失败，已恢复原配置。备份及日志：$backup"
-fi' EXIT
-trap 'exit 1' HUP INT TERM
 for name in sb10 sb11 sb; do
 mv -f "$backup/$name.new.json" "/etc/s-box/$name.json" || exit 1
 done
@@ -1503,7 +1555,8 @@ green "配置已保存，原配置备份：$backup"
 case "$role" in
 landing) green "本机角色：落地\n内网入口（落地机内网 IP+端口）：$host:$port"; yellow "到中转机运行 sb → 14 → 2，填写上面的落地机内网 IP+端口" ;;
 relay) green "本机角色：中转\n内网入口（落地机内网 IP+端口）：$host:$port"; yellow "客户端直接使用本机 sb → 8 的节点；域名分流在落地机设置" ;;
-none) green "已取消本机内网链路，恢复原有节点路由" ;;
+public) green "本机角色：中转\n链路类型：公网\n落地协议：VLESS+Reality"; yellow "客户端直接使用本机 sb → 8 的节点；域名分流在落地机设置" ;;
+none) green "已取消本机链路，恢复原有节点路由" ;;
 esac
 )
 
@@ -1511,9 +1564,11 @@ lanview(){
 jq -r '
 ([.inbounds[] | select(.tag == "lan-ss-in")][0]) as $in |
 ([.outbounds[] | select(.tag == "lan-ss-out")][0]) as $out |
-if $in != null then "本机角色：落地\n内网入口（落地机内网 IP+端口）：\($in.listen):\($in.listen_port)"
-elif $out != null then "本机角色：中转\n内网入口（落地机内网 IP+端口）：\($out.server):\($out.server_port)\n客户端节点：本机 sb → 8"
-else "本机未配置内网链路" end
+([.outbounds[] | select(.tag == "public-vless-out")][0]) as $public |
+if $in != null then "本机角色：落地\n链路类型：内网\n内网入口（落地机内网 IP+端口）：\($in.listen):\($in.listen_port)"
+elif $out != null then "本机角色：中转\n链路类型：内网\n内网入口（落地机内网 IP+端口）：\($out.server):\($out.server_port)\n客户端节点：本机 sb → 8"
+elif $public != null then "本机角色：中转\n链路类型：公网\n落地地址（公网 IP 或域名+端口）：\(if $public.server | contains(":") then "[\($public.server)]" else $public.server end):\($public.server_port)\n落地协议：VLESS+Reality\n客户端节点：本机 sb → 8"
+else "本机未配置链路" end
 ' /etc/s-box/sb.json
 }
 
@@ -1521,13 +1576,13 @@ lanchain(){
 local choice ip port endpoint index addr
 local -a addresses
 for addr in /etc/s-box/sb10.json /etc/s-box/sb11.json /etc/s-box/sb.json; do
-[[ -f "$addr" ]] || { red "请先安装本 fork 的双协议节点，再配置内网链路"; return 1; }
+[[ -f "$addr" ]] || { red "请先安装本 fork 的双协议节点，再配置链路"; return 1; }
 done
 echo
-green "Sing-box 内网链式代理"
-yellow "1. 本机作为落地（选择本机内网 IP 和端口）\n2. 本机作为中转（填写落地机内网 IP+端口）\n3. 查看当前链路\n4. 取消本机链路\n0. 返回主菜单"
+green "Sing-box 链式代理"
+yellow "1. 本机作为内网落地（选择本机内网 IP 和端口）\n2. 本机作为内网中转（填写落地机内网 IP+端口）\n3. 查看当前链路\n4. 取消本机链路\n5. 本机作为公网中转（粘贴落地节点链接）\n0. 返回主菜单"
 while true; do
-readp "请选择【0-4】：" choice || return
+readp "请选择【0-5】：" choice || return
 case "$choice" in
 1)
 mapfile -t addresses < <(while read -r addr; do lanprivate "$addr" && printf '%s\n' "$addr"; done < <(ip -4 -o addr show scope global | awk '{split($4,a,"/"); print a[1]}'))
@@ -1555,9 +1610,16 @@ if [[ ! "$endpoint" =~ ^([0-9.]+):([0-9]{1,5})$ ]]; then red "格式有误，例
 lanapply relay "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
 ;;
 3) lanview ;;
-4) if jq -e 'any(.inbounds[]; .tag == "lan-ss-in") or any(.outbounds[]; .tag == "lan-ss-out")' /etc/s-box/sb.json >/dev/null; then lanapply none; else green "本机未配置内网链路"; fi ;;
+4) if jq -e 'any(.inbounds[]; .tag == "lan-ss-in") or any(.outbounds[]; .tag == "lan-ss-out" or .tag == "public-vless-out")' /etc/s-box/sb.json >/dev/null; then lanapply none; else green "本机未配置链路"; fi ;;
+5)
+yellow "设置成功后将替换本机当前链路；客户端使用本机 sb → 8 的节点"
+IFS= read -r -s -p "$(yellow '请粘贴落地机的 VLESS+Reality 完整链接（输入隐藏）：')" endpoint || return
+echo
+lanapply public "$endpoint"
+endpoint=
+;;
 0) sb; return ;;
-*) red "请选择 0-4" ;;
+*) red "请选择 0-5" ;;
 esac
 done
 }
@@ -1583,7 +1645,7 @@ green "11. 填写Hysteria2证书路径"
 green "12. 更换IP刷新本地IP、调整IPV4/IPV6配置输出"
 white "----------------------------------------------------------------------------------"
 green "13. Sing-box-yg脚本使用说明书"
-green "14. 内网链式代理 【选择中转/落地】"
+green "14. 链式代理 【内网/公网】"
 white "----------------------------------------------------------------------------------"
 green " 0. 退出脚本"
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
