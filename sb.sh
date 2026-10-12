@@ -1523,10 +1523,10 @@ local -a addresses
 for addr in /etc/s-box/sb10.json /etc/s-box/sb11.json /etc/s-box/sb.json; do
 [[ -f "$addr" ]] || { red "请先安装本 fork 的双协议节点，再配置内网链路"; return 1; }
 done
-while true; do
 echo
 green "Sing-box 内网链式代理"
 yellow "1. 本机作为落地（选择本机内网 IP 和端口）\n2. 本机作为中转（填写落地机内网 IP+端口）\n3. 查看当前链路\n4. 取消本机链路\n0. 返回主菜单"
+while true; do
 readp "请选择【0-4】：" choice || return
 case "$choice" in
 1)
