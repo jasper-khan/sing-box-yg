@@ -1,16 +1,17 @@
-v26.4.12-fork.22更新内容：
+v26.4.12-fork.23更新内容：
 
 注意：从 fork.11 之前的版本升级，必须先卸载再重装；只点菜单6更新脚本不会注册 WARP 账户，也不会重建 sb10/sb11 的 wireguard 出站与分流规则。
 
 更新内容：
-1、新增可选 realm 内网端口转发管理（菜单14）：安装时校验官方精简版 SHA256，独立维护 TCP/UDP 转发规则与 systemd 服务，不修改原有节点或防火墙
-2、取消安装时 IPv4/IPv6 防火墙规则保存询问，两项固定为 No；保留 Hy2 多端口跳跃的规则持久化，新增对应守卫
-3、fork.20：同步上游 4d5cce9（2026-10-05）：过滤自动安装/启用 systemd-resolved 的改动，保留系统现有 DNS 管理方式；新增对应守卫
-4、fork.19：自定义协议端口下限从 1000 放宽到 1：Hy2 可直接使用 UDP 443 等低端口；脚本仍会检查端口占用
-5、fork.18：Hy2 混淆（salamander）默认开启：安装时自动生成随机密码并注入 sb10/sb11/sb.json，分享链接自动带 obfs=salamander&obfs-password=...；菜单 3 → 7 可关闭或重置密码
-6、fork.17：Hy2 默认伪装 foothill.edu（masquerade）+ 菜单 3 → 7 混淆开关 + 修复 sb.json 读取的 sed 截断
-7、fork.16：节点名称支持空格
-8、fork.15：GitHub Actions 自动守卫（bash -n + fork-check + render-configs）
-9、fork.14：修复菜单 3 → 6 → 5 写 sb10.json 用错下标
+1、realm 中转节点直接导出：菜单14 → 10 绑定落地分享链接，主菜单8自动显示转换后的中转链接，保留落地认证/TLS/混淆参数；删除规则清理链接，不改节点服务或防火墙
+2、fork.22：新增可选 realm 内网端口转发管理（菜单14）：安装时校验官方精简版 SHA256，独立维护 TCP/UDP 转发规则与 systemd 服务，不修改原有节点或防火墙
+3、取消安装时 IPv4/IPv6 防火墙规则保存询问，两项固定为 No；保留 Hy2 多端口跳跃的规则持久化，新增对应守卫
+4、fork.20：同步上游 4d5cce9（2026-10-05）：过滤自动安装/启用 systemd-resolved 的改动，保留系统现有 DNS 管理方式；新增对应守卫
+5、fork.19：自定义协议端口下限从 1000 放宽到 1：Hy2 可直接使用 UDP 443 等低端口；脚本仍会检查端口占用
+6、fork.18：Hy2 混淆（salamander）默认开启：安装时自动生成随机密码并注入 sb10/sb11/sb.json，分享链接自动带 obfs=salamander&obfs-password=...；菜单 3 → 7 可关闭或重置密码
+7、fork.17：Hy2 默认伪装 foothill.edu（masquerade）+ 菜单 3 → 7 混淆开关 + 修复 sb.json 读取的 sed 截断
+8、fork.16：节点名称支持空格
+9、fork.15：GitHub Actions 自动守卫（bash -n + fork-check + render-configs）
+10、fork.14：修复菜单 3 → 6 → 5 写 sb10.json 用错下标
 
 详见：https://github.com/jasper-khan/sing-box-yg

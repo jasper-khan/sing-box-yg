@@ -371,6 +371,15 @@ if (-not $realm.Success -or $text -notmatch '(?m)^\s*14\s*\)\s*realm_menu;;') {
   $errors += 'realm management started changing existing nodes or firewall rules'
 }
 
+# 21) The node panel also exports realm links without requiring local sing-box nodes.
+$nodePanel = [regex]::Match($text, '(?ms)^clash_sb_share\(\)\{\r?\n.*?^\}')
+if (-not $nodePanel.Success -or $nodePanel.Value -notmatch '(?m)^realm_show_nodes\s*$' -or $nodePanel.Value -match '(?m)^sbactive\s*$') {
+  $errors += 'node panel no longer exports realm-only relay nodes'
+}
+if ($text -notmatch '(?m)^10\) realm_node_menu ;;' -or $text -notmatch '(?m)^realm_nodes=/etc/realm/node-links\.json\s*$') {
+  $errors += 'realm landing-node binding menu or private link storage is missing'
+}
+
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Host "FAIL: $_" -ForegroundColor Red }
   exit 1

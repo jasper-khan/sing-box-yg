@@ -1368,7 +1368,7 @@ fi
 }
 
 sbshare(){
-rm -rf /etc/s-box/{jhdy,vl_reality,hy2}.txt
+: > /etc/s-box/jhdy.txt
 result_vl_hy2 && resvless && reshy2
 cat /etc/s-box/vl_reality.txt 2>/dev/null >> /etc/s-box/jhdy.txt
 cat /etc/s-box/hy2.txt 2>/dev/null >> /etc/s-box/jhdy.txt
@@ -1384,8 +1384,15 @@ echo
 }
 
 clash_sb_share(){
-sbactive
+if [[ -f /etc/s-box/sb.json ]]; then
+white "【本机直连节点】"
 sbshare
+fi
+if realm_managed; then
+realm_show_nodes
+elif [[ ! -f /etc/s-box/sb.json ]]; then
+yellow "当前没有本机节点或 realm 中转规则"
+fi
 }
 
 bbr(){
@@ -1417,6 +1424,7 @@ echo
 
 realm_bin=/usr/local/bin/realm
 realm_config=/etc/realm/config.json
+realm_nodes=/etc/realm/node-links.json
 realm_unit=/etc/systemd/system/realm.service
 realm_marker='# Managed by sing-box-yg realm manager'
 realm_exec='ExecStart=/usr/local/bin/realm -c /etc/realm/config.json'
@@ -1644,6 +1652,72 @@ if ! jq --argjson i "$index" 'del(.endpoints[$i - 1])' "$realm_config" > "$tmp";
 rm -f "$tmp"; yellow "生成 realm 配置失败"; return 1
 fi
 realm_commit "$tmp" || { rm -f "$tmp"; return 1; }
+realm_prune_nodes || yellow "转发规则已删除，但清理节点链接失败，请检查 $realm_nodes"
+}
+
+realm_read_nodes(){
+if [[ -L $realm_nodes || ( -e $realm_nodes && ! -f $realm_nodes ) ]]; then yellow "节点链接文件不是普通文件，未读取或覆盖" >&2; return 1; fi
+if [[ ! -e $realm_nodes ]]; then printf '{"nodes":[]}\n'; return; fi
+if ! jq -e 'type == "object" and (.nodes | type == "array") and all(.nodes[]; (.listen | type == "string") and (.remote | type == "string") and (.protocol == "tcp" or .protocol == "udp") and (.link | type == "string"))' "$realm_nodes" >/dev/null 2>&1; then
+yellow "节点链接文件格式无效，未覆盖" >&2; return 1
+fi
+cat "$realm_nodes"
+}
+
+realm_prune_nodes(){
+[[ -e $realm_nodes || -L $realm_nodes ]] || return 0
+local data tmp
+data=$(realm_read_nodes) || return 1
+tmp=$(mktemp "$realm_nodes.tmp.XXXXXX") || return 1
+if ! printf '%s' "$data" | jq --slurpfile config "$realm_config" '.nodes |= map(. as $n | select(any($config[0].endpoints[]; .listen == $n.listen and .remote == $n.remote and (if $n.protocol == "tcp" then .network.no_tcp != true else .network.use_udp == true end))))' > "$tmp" || ! chmod 600 "$tmp" || ! mv -f "$tmp" "$realm_nodes"; then
+rm -f "$tmp"; yellow "清理节点链接失败"; return 1
+fi
+}
+
+realm_bind_node(){
+[[ $# -eq 3 && $1 =~ ^[0-9]{1,6}$ ]] || { yellow "请输入有效的规则序号"; return 1; }
+realm_ready || return 1
+local index=$((10#$1)) host=$2 link=$3 endpoint parsed port protocol query name converted data tmp
+(( index >= 1 )) || { yellow "规则序号超出范围"; return 1; }
+endpoint=$(jq -ce --argjson i "$index" '.endpoints[$i - 1] // empty' "$realm_config") || { yellow "规则序号超出范围"; return 1; }
+if [[ ! $host =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ && ! $host =~ ^\[[0-9a-fA-F:]+\]$ ]]; then yellow "中转地址请填写公网 IP 或域名；IPv6 使用 [地址]，不含端口"; return 1; fi
+parsed=$(printf '%s' "$link" | jq -Rsce 'select(test("[[:cntrl:]]") | not) | capture("^(?<scheme>vless|hysteria2|hy2)://(?<auth>[^/?#]+)@(?<host>\\[[^]]+\\]|[^:/?#]+):(?<port>[0-9]+)(?<query>\\?[^#]*)?(?:#(?<name>.*))?$")' 2>/dev/null) || { yellow "请粘贴完整的落地 VLESS 或 Hysteria2 分享链接"; return 1; }
+port=$(realm_valid_port "$(jq -r '.port' <<< "$parsed")") || { yellow "落地节点端口无效"; return 1; }
+[[ $port == "$(jq -r '.remote | split(":") | last' <<< "$endpoint")" ]] || { yellow "节点端口与这条转发规则的落地端口不同"; return 1; }
+if [[ $(jq -r '.scheme' <<< "$parsed") == vless ]]; then protocol=tcp; else protocol=udp; fi
+if ! jq -e --arg p "$protocol" 'if $p == "tcp" then .network.no_tcp != true else .network.use_udp == true end' <<< "$endpoint" >/dev/null; then yellow "节点协议与转发规则不匹配：VLESS 需要 TCP，Hysteria2 需要 UDP"; return 1; fi
+query=$(jq -r '(.query // "" | ltrimstr("?")) | split("&") | map(select((split("=")[0] | ascii_downcase) != "mport")) | join("&")' <<< "$parsed") || return 1
+if [[ $protocol == udp && ! $(printf '%s' "$query" | tr '&' '\n') =~ (^|$'\n')sni= ]]; then
+query="${query:+$query&}sni=$(jq -r '.host | ltrimstr("[") | rtrimstr("]") | @uri' <<< "$parsed")"
+fi
+name=$(jq -r '.name // .scheme' <<< "$parsed")
+converted="$(jq -r '.scheme + "://" + .auth + "@"' <<< "$parsed")$host:$(jq -r '.listen | split(":") | last' <<< "$endpoint")${query:+?$query}#$name%20%5B%E5%86%85%E7%BD%91%E4%B8%AD%E8%BD%AC%5D"
+data=$(realm_read_nodes) || return 1
+tmp=$(mktemp "$realm_nodes.tmp.XXXXXX") || return 1
+if ! printf '%s' "$data" | jq --argjson e "$endpoint" --arg p "$protocol" --arg link "$converted" '.nodes = [.nodes[] | select(.listen != $e.listen or .remote != $e.remote or .protocol != $p)] + [{listen:$e.listen,remote:$e.remote,protocol:$p,link:$link}]' > "$tmp" || ! chmod 600 "$tmp" || ! mv -f "$tmp" "$realm_nodes"; then
+rm -f "$tmp"; yellow "保存中转节点失败"; return 1
+fi
+green "中转节点已保存，主菜单 8 可直接复制；认证、TLS 和混淆参数沿用落地节点"
+}
+
+realm_show_nodes(){
+realm_ready || return 1
+local data links
+data=$(realm_read_nodes) || return 1
+links=$(printf '%s' "$data" | jq -r --slurpfile config "$realm_config" '.nodes[] | . as $n | select(any($config[0].endpoints[]; .listen == $n.listen and .remote == $n.remote and (if $n.protocol == "tcp" then .network.no_tcp != true else .network.use_udp == true end))) | .link') || return 1
+white "【realm 内网中转节点】"
+if [[ -z $links ]]; then yellow "尚未绑定落地节点链接，请在菜单 14 → 10 设置"; return 0; fi
+if ! systemctl is-active --quiet realm.service; then yellow "realm 当前未运行，请先在菜单 14 启动服务"; fi
+printf '%s\n' "$links"
+}
+
+realm_node_menu(){
+realm_list || return 1
+local index host link
+readp "绑定规则序号：" index || return
+readp "中转公网 IP 或域名（IPv6 使用 [地址]）：" host || return
+IFS= read -r -p "$(yellow '粘贴落地机菜单 8 的单条节点链接：')" link || return
+realm_bind_node "$index" "$host" "$link"
 }
 
 realm_menu(){
@@ -1661,8 +1735,9 @@ echo "6. 停止 realm"
 echo "7. 重启 realm"
 echo "8. 查看服务状态"
 echo "9. 查看最近日志"
+echo "10. 绑定落地节点链接（主菜单 8 导出中转节点）"
 echo "0. 返回主菜单"
-readp "请选择【0-9】：" choice || return
+readp "请选择【0-10】：" choice || return
 case $choice in
 1) realm_install ;;
 2) realm_list ;;
@@ -1673,6 +1748,7 @@ case $choice in
 7) if realm_ready; then if [[ $(jq '.endpoints | length' "$realm_config") -gt 0 ]]; then if systemctl restart realm.service; then sleep 1; systemctl is-active --quiet realm.service || yellow "realm 重启未成功"; else yellow "realm 重启失败"; fi; else yellow "请先添加转发规则"; fi; fi ;;
 8) realm_ready && systemctl status --no-pager --full realm.service ;;
 9) if realm_ready; then if command -v journalctl >/dev/null 2>&1; then journalctl -u realm.service -n 50 --no-pager; else yellow "journalctl 不可用"; fi; fi ;;
+10) realm_node_menu ;;
 0) if command -v sb >/dev/null 2>&1; then sb; return; else exit; fi ;;
 *) yellow "无效选项" ;;
 esac
