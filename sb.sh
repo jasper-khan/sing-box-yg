@@ -1537,8 +1537,16 @@ readp "选择本机（落地机）的内网 IP 编号（回车默认 1）：" in
 index=${index:-1}
 if [[ ! "$index" =~ ^[1-9][0-9]{0,2}$ ]] || ((index > ${#addresses[@]})); then red "地址编号无效"; continue; fi
 ip=${addresses[$((index-1))]}
-port=$(jq -r '[.inbounds[] | select(.tag == "lan-ss-in")][0].listen_port // 54321' /etc/s-box/sb.json)
-readp "落地机内网端口（回车默认 $port）：" endpoint || return
+port=$(jq -r '[.inbounds[] | select(.tag == "lan-ss-in")][0].listen_port // empty' /etc/s-box/sb.json)
+if [[ -z $port ]]; then
+while true; do
+port=$(shuf -i 10000-65535 -n 1)
+[[ -z $(ss -H -lntu "sport = :$port") ]] && break
+done
+readp "落地机内网端口（回车使用随机端口 $port，也可手动填写）：" endpoint || return
+else
+readp "落地机内网端口（回车保留当前 $port，可手动修改）：" endpoint || return
+fi
 lanapply landing "$ip" "${endpoint:-$port}"
 ;;
 2)
