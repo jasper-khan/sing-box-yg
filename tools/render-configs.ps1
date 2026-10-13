@@ -101,7 +101,8 @@ function Convert-TemplateToJson {
         [string]$Template
     )
 
-    $rendered = [regex]::Replace($Template, '\$\{[^}\r\n]*\}', '0')
+    $rendered = [regex]::Replace($Template, '\$\{ym_vl_re\}|\$ym_vl_re\b', 'foothill.edu')
+    $rendered = [regex]::Replace($rendered, '\$\{[^}\r\n]*\}', '0')
     $rendered = Remove-CommandSubstitutions -Text $rendered
 
     # The templates also use bare variables such as $res in numeric positions.
@@ -184,6 +185,11 @@ foreach ($name in @('sb10', 'sb11')) {
 
     Assert-ExactTypes -Name $name -Kind 'inbound' -Expected @($expectedTypes[$name]) `
         -Actual @($json.inbounds | ForEach-Object { [string]$_.type })
+
+    $tls = $json.inbounds[0].tls
+    if ([string]$tls.server_name -cne 'foothill.edu' -or [string]$tls.reality.handshake.server -cne 'foothill.edu') {
+        Stop-WithError "$name.json Reality server_name and handshake.server must stay foothill.edu."
+    }
 
     if ([string]$json.inbounds[1].masquerade -cne 'https://foothill.edu') {
         Stop-WithError "$name.json hy2 inbound masquerade must stay https://foothill.edu."

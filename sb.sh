@@ -64,7 +64,7 @@ if [ ! -f sbyg_update ]; then
 green "首次安装Sing-box-yg脚本必要的依赖……"
 if command -v apk >/dev/null 2>&1; then
 apk update
-apk add bash libc6-compat jq openssl procps busybox-extras iproute2 iputils coreutils socat iptables grep tar tzdata util-linux
+apk add bash libc6-compat jq openssl procps busybox-extras iproute2 iputils coreutils iptables grep tar tzdata util-linux
 apk add virt-what
 else
 if [[ $release = Centos && ${vsid} =~ 8 ]]; then
@@ -80,13 +80,13 @@ apt update -y
 printf '%s\n' \
 'iptables-persistent iptables-persistent/autosave_v4 boolean false' \
 'iptables-persistent iptables-persistent/autosave_v6 boolean false' | debconf-set-selections
-apt install jq cron socat busybox iptables-persistent coreutils util-linux -y
+apt install jq cron busybox iptables-persistent coreutils util-linux -y
 elif [ -x "$(command -v yum)" ]; then
 yum update -y && yum install epel-release -y
-yum install jq socat busybox coreutils util-linux -y
+yum install jq busybox coreutils util-linux -y
 elif [ -x "$(command -v dnf)" ]; then
 dnf update -y
-dnf install jq socat busybox coreutils util-linux -y
+dnf install jq busybox coreutils util-linux -y
 fi
 if [ -x "$(command -v yum)" ] || [ -x "$(command -v dnf)" ]; then
 if [ -x "$(command -v yum)" ]; then
@@ -803,7 +803,7 @@ sbactive
 newv=$(curl -fsSL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1)
 [[ -n $newv ]] && echo "$newv" > /etc/s-box/v
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-lnsb && blue "Sing-box-yg脚本安装成功，脚本快捷方式：sb" && cronsb
+lnsb && blue "Sing-box-yg脚本安装成功，脚本快捷方式：sb"
 echo
 ipuuid
 sbshare
@@ -1229,20 +1229,13 @@ stclre
 fi
 }
 
-cronsb(){
-uncronsb
-tmpct=$(mktemp) || { red "创建临时文件失败"; return 1; }
-crontab -l 2>/dev/null > "$tmpct"
-echo "0 1 * * * systemctl restart sing-box;rc-service sing-box restart" >> "$tmpct"
-crontab "$tmpct" >/dev/null 2>&1
-rm -f "$tmpct"
-}
 uncronsb(){
-tmpct=$(mktemp) || { red "创建临时文件失败"; return 1; }
-crontab -l 2>/dev/null > "$tmpct"
-sed -i '/sing-box/d' "$tmpct"
-crontab "$tmpct" >/dev/null 2>&1
-rm -f "$tmpct"
+command -v crontab >/dev/null 2>&1 || return 0
+local oldjob='0 1 * * * systemctl restart sing-box;rc-service sing-box restart'
+local currentcron
+currentcron=$(crontab -l 2>/dev/null) || return 0
+printf '%s\n' "$currentcron" | grep -Fxq "$oldjob" || return 0
+printf '%s\n' "$currentcron" | grep -Fxv "$oldjob" | crontab -
 }
 
 lnsb(){
@@ -1624,6 +1617,7 @@ esac
 done
 }
 
+uncronsb || red "清理旧版每日重启任务失败，请检查 crontab"
 clear
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 
 white "Vless-reality-vision、Hysteria2 双协议共存脚本"

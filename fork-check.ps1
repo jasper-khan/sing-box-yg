@@ -30,26 +30,7 @@ if ($bad.Count) {
   $errors += "ym_vl_re assigned to non-foothill value: $($bad -join ' | ')"
 }
 
-# 2) sb10/sb11 server templates: line 23 = server_name, line 27 = reality handshake.server
-$blocks = [regex]::Matches($text, '(?ms)^cat > /etc/s-box/(sb10|sb11)\.json <<EOF\r?\n(.*?)^EOF\r?$')
-if ($blocks.Count -ne 2) {
-  $errors += "sb10/sb11 config templates not found (found $($blocks.Count))"
-} else {
-  foreach ($m in $blocks) {
-    $name = $m.Groups[1].Value
-    $body = $m.Groups[2].Value -split '\r?\n'
-    if ($body.Count -lt 27) {
-      $errors += "$name`: template shorter than 27 lines"
-      continue
-    }
-    if ($body[22] -notmatch '"server_name": "\$\{ym_vl_re\}",') {
-      $errors += "$name`: line 23 is no longer server_name (changeym sed 23 would miss)"
-    }
-    if ($body[26] -notmatch '"server": "\$\{ym_vl_re\}",') {
-      $errors += "$name`: line 27 is no longer reality handshake.server (sed 27 would miss)"
-    }
-  }
-}
+# 2) Reality domain fields are checked after JSON rendering in render-configs.ps1.
 
 # 3) the reality-domain setter must keep writing by JSON path (no line numbers)
 if ($text -notmatch 'jq --arg v "\$ym_vl_re"' -or
@@ -172,7 +153,7 @@ if ($text -notmatch 'Vless-reality\uFF1ATCP \$port_vl_re' -or
   $errors += 'install no longer prints the VLESS/Hysteria2 inbound port reminder'
 }
 # 9) GitLab publishing and Telegram push must stay removed, and "变更配置"
-#    must stay at the 5 remaining interaction points.
+#    must keep the 7 retained interaction points.
 $pushHits = [regex]::Matches($text, '(?i)gitlab|telegram|TG通知|电报|sbtg\.sh|gitpush\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($pushHits) {
   $errors += "gitlab/telegram feature reappeared: $($pushHits -join ', ')"
@@ -362,6 +343,14 @@ foreach ($ipFamily in 'v4', 'v6') {
 }
 if ($text -notmatch '\|\s*debconf-set-selections') {
   $errors += 'iptables-persistent install answers are no longer preseeded'
+}
+
+# 20) Removed socat installation and daily restart creation must stay absent.
+if ($text -match '\bsocat\b') {
+  $errors += 'unused socat dependency reappeared'
+}
+if ($text -match '\bcronsb\b') {
+  $errors += 'daily sing-box restart creation reappeared'
 }
 
 if ($errors.Count) {
