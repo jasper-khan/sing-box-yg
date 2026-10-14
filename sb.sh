@@ -12,6 +12,13 @@ yellow(){ echo -e "\033[33m\033[01m$1\033[0m";}
 blue(){ echo -e "\033[36m\033[01m$1\033[0m";}
 white(){ echo -e "\033[37m\033[01m$1\033[0m";}
 readp(){ read -p "$(yellow "$1")" $2;}
+readchoice(){
+while readp "$1" "$2"; do
+[[ ${!2} =~ $3 ]] && return 0
+red "输入无效，请按提示重新选择"
+done
+return 1
+}
 [[ $EUID -ne 0 ]] && yellow "请以root模式运行脚本" && exit
 stty erase $'\b' 2>/dev/null || stty erase '^H' 2>/dev/null
 if [[ -f /etc/redhat-release ]]; then
@@ -159,7 +166,7 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 green "使用哪个内核版本？"
 yellow "1：使用目前最新正式版内核 (回车默认)"
 yellow "2：使用之前1.10.7正式版内核 (支持IPV4/IPV6代理优先级切换)"
-readp "请选择【1-2】：" menu
+readchoice "请选择【1-2】：" menu '^[12]?$' || return 1
 if [ -z "$menu" ] || [ "$menu" = "1" ] ; then
 sbcore=$(curl -Ls https://github.com/SagerNet/sing-box/releases/latest | grep -oP 'tag/v\K[0-9.]+' | head -n 1)
 else
@@ -205,44 +212,31 @@ blue "Vless-reality的SNI域名默认为 foothill.edu"
 }
 
 chooseport(){
-if [[ -z $port ]]; then
-port=$(shuf -i 10000-65535 -n 1)
-until [[ -z $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") && -z $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] 
-do
-[[ -n $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") || -n $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] && yellow "\n端口被占用，请重新输入端口" && readp "自定义端口:" port
-until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1 && $((10#$port)) -le 65535 ]]
-do
-yellow "\n端口必须是1-65535之间的数字" && readp "自定义端口:" port
-done
+[[ -z $port ]] && port=$(shuf -i 10000-65535 -n 1)
+while true; do
+[[ $port = 0 ]] && return 1
+if [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1 && $((10#$port)) -le 65535 ]]; then
 port=$((10#$port))
-done
-else
-until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1 && $((10#$port)) -le 65535 ]]
-do
-yellow "\n端口必须是1-65535之间的数字" && readp "自定义端口:" port
-done
-port=$((10#$port))
-until [[ -z $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") && -z $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]]
-do
-[[ -n $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") || -n $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] && yellow "\n端口被占用，请重新输入端口" && readp "自定义端口:" port
-until [[ $port =~ ^[0-9]+$ && $((10#$port)) -ge 1 && $((10#$port)) -le 65535 ]]
-do
-yellow "\n端口必须是1-65535之间的数字" && readp "自定义端口:" port
-done
-port=$((10#$port))
-done
-fi
+if [[ -z $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") && -z $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]]; then
 blue "确认的端口：$port" && sleep 2
+return 0
+fi
+yellow "\n端口被占用，请重新输入端口"
+else
+yellow "\n端口必须是1-65535之间的数字"
+fi
+readp "自定义端口（0返回）:" port || return 1
+done
 }
 
 vlport(){
-readp "\n设置Vless-reality端口 (回车跳过为10000-65535之间的随机端口)：" port
-chooseport
+readp "\n设置Vless-reality端口 (回车跳过为10000-65535之间的随机端口，0返回)：" port || return 1
+chooseport || return 1
 port_vl_re=$port
 }
 hy2port(){
-readp "\n设置Hysteria2主端口 (回车跳过为10000-65535之间的随机端口)：" port
-chooseport
+readp "\n设置Hysteria2主端口 (回车跳过为10000-65535之间的随机端口，0返回)：" port || return 1
+chooseport || return 1
 port_hy2=$port
 }
 
@@ -251,7 +245,7 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 green "三、设置各个协议端口"
 yellow "1：自动生成每个协议的随机端口 (10000-65535范围内)，回车默认"
 yellow "2：自定义每个协议端口"
-readp "请输入【1-2】：" port
+readchoice "请输入【1-2】：" port '^[12]?$' || return 1
 if [ -z "$port" ] || [ "$port" = "1" ] ; then
 ports=()
 for i in {1..2}; do
@@ -268,7 +262,7 @@ done
 port_vl_re=${ports[0]}
 port_hy2=${ports[1]}
 else
-vlport && hy2port
+vlport && hy2port || return 1
 fi
 echo
 blue "各协议端口确认如下"
@@ -679,10 +673,11 @@ fi
 if [[ -n $($status_cmd 2>/dev/null | grep -w "$status_pattern") && -f '/etc/s-box/sb.json' ]]; then
 v4v6
 if [[ -n $v4 && -n $v6 ]]; then
-green "调整IPv4/IPV6配置输出"
+green "切换入站 IPv4 / IPv6"
 yellow "1：刷新本地IP，使用IPV4配置输出 (回车默认) "
 yellow "2：刷新本地IP，使用IPV6配置输出"
-readp "请选择【1-2】：" menu
+readchoice "请选择【1-2】，0返回：" menu '^[0-2]?$' || return 1
+[[ $menu = 0 ]] && return 1
 if [ -z "$menu" ] || [ "$menu" = "1" ]; then
 server_ip="$v4"
 echo "$server_ip" > /etc/s-box/server_ip.log
@@ -704,7 +699,9 @@ echo "$server_ip" > /etc/s-box/server_ip.log
 fi
 fi
 else
-red "Sing-box服务未运行" && exit
+red "Sing-box服务未运行"
+readp "回车返回主菜单："
+return 1
 fi
 }
 
@@ -780,13 +777,13 @@ echo
 
 instsllsingbox(){
 if [[ -f '/etc/systemd/system/sing-box.service' ]]; then
-red "已安装Sing-box服务，无法再次安装" && exit
+red "已安装Sing-box服务，无法再次安装" && return 1
 fi
 mkdir -p /etc/s-box
 v6
-inssb
+inssb || return 1
 inscertificate
-insport
+insport || return 1
 insname
 sleep 2
 echo
@@ -799,13 +796,13 @@ short_id=$(/etc/s-box/sing-box generate rand --hex 4)
 warpwg
 inssbjsonser
 sbservice
-sbactive
+sbactive || return 1
 newv=$(curl -fsSL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1)
 [[ -n $newv ]] && echo "$newv" > /etc/s-box/v
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 lnsb && blue "Sing-box-yg脚本安装成功，脚本快捷方式：sb"
 echo
-ipuuid
+ipuuid || return 1
 sbshare
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 blue "可选择8，刷新并显示分享链接"
@@ -814,65 +811,76 @@ echo
 }
 
 setcert(){
+sbactive || return 1
 certc_now=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].tls.certificate_path' 2>/dev/null)
 certp_now=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path' 2>/dev/null)
 echo
 blue "当前证书：${certc_now:-未知}"
 blue "当前私钥：${certp_now:-未知}"
 echo
-readp "输入证书文件路径 (回车保持当前)：" certc_new
-readp "输入私钥文件路径 (回车保持当前)：" certp_new
+while true; do
+readp "输入证书文件路径 (回车保持当前，0返回)：" certc_new || return 1
+[[ $certc_new = 0 ]] && return
+readp "输入私钥文件路径 (回车保持当前，0返回)：" certp_new || return 1
+[[ $certp_new = 0 ]] && return
 certc_new=${certc_new:-$certc_now}
 certp_new=${certp_new:-$certp_now}
 if [[ ! -f $certc_new || ! -f $certp_new ]]; then
-red "证书或私钥文件不存在，未做修改" && sleep 3 && sb
-return
+red "证书或私钥文件不存在，未做修改"
+continue
 fi
+break
+done
 for f in $sbfiles; do
 jq --arg c "$certc_new" --arg k "$certp_new" '(.inbounds[1].tls.certificate_path) = $c | (.inbounds[1].tls.key_path) = $k' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
 green "Hysteria2证书路径已更新：$certc_new"
-sleep 3 && sb
+sleep 3
 }
 
 setname(){
 green "当前节点名称：$sbnode"
-readp "输入新的节点名称（回车保持当前，输入0恢复默认主机名）：" menu
+while true; do
+readp "输入新的节点名称（回车保持当前，输入0恢复默认主机名）：" menu || return 1
 if [ -z "$menu" ]; then
-sb
+return
 elif [ "$menu" = "0" ]; then
 rm -f /etc/s-box/nodename.log
 sbnode=$(hostname)
 sbshare > /dev/null 2>&1
 green "节点名称已恢复默认主机名：$sbnode"
-sleep 2 && sb
+sleep 2
 else
 menu=$(printf '%s' "$menu" | tr -d '\r\n#')
 if [ -z "$menu" ]; then
-red "节点名称无效" && sleep 2 && sb
+red "节点名称无效"
+continue
 else
 printf '%s\n' "$menu" > /etc/s-box/nodename.log
 sbnode=$menu
 sbshare > /dev/null 2>&1
 green "节点名称已更新：$sbnode"
-sleep 2 && sb
+sleep 2
 fi
 fi
+return
+done
 }
 
 changeym(){
 echo
 vl_na="当前伪装域名：$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')"
 green "$vl_na"
-readp "请输入新的Reality伪装域名 (回车使用foothill.edu)：" ym_vl_re
+readp "请输入新的Reality伪装域名 (回车使用foothill.edu，0返回)：" ym_vl_re || return 1
+[[ $ym_vl_re = 0 ]] && return
 ym_vl_re=${ym_vl_re:-foothill.edu}
 for f in $sbfiles; do
 jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
 blue "Vless-reality伪装域名已更换为：$ym_vl_re"
-sleep 3 && sb
+sleep 3
 }
 allports(){
 vl_port=$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
@@ -897,10 +905,12 @@ ip6tables -t nat -C PREROUTING -j SBHY2PORT 2>/dev/null || ip6tables -t nat -I P
 }
 
 changeport(){
-sbactive
+sbactive || return 1
 allports
 fports(){
-readp "\n请输入转发的端口范围 (1000-65535范围内，格式为 小数字:大数字)：" rangeport
+while true; do
+readp "\n请输入转发的端口范围 (1000-65535范围内，格式为 小数字:大数字，0返回)：" rangeport || return 1
+[[ $rangeport = 0 ]] && return 1
 if [[ $rangeport =~ ^([1-9][0-9]{3,4}:[1-9][0-9]{3,4})$ ]]; then
 b=${rangeport%%:*}
 c=${rangeport##*:}
@@ -911,16 +921,20 @@ ip6tables -t nat -A SBHY2PORT -p udp --dport $rangeport -j DNAT --to-destination
 netfilter-persistent save >/dev/null 2>&1
 service iptables save >/dev/null 2>&1
 blue "已确认转发的端口范围：$rangeport"
+break
 else
-red "输入的端口范围不在有效范围内" && fports
+red "输入的端口范围不在有效范围内"
 fi
 else
-red "输入格式不正确。格式为 小数字:大数字" && fports
+red "输入格式不正确。格式为 小数字:大数字"
 fi
+done
 echo
 }
 fport(){
-readp "\n请输入一个转发的端口 (1000-65535范围内)：" onlyport
+while true; do
+readp "\n请输入一个转发的端口 (1000-65535范围内，0返回)：" onlyport || return 1
+[[ $onlyport = 0 ]] && return 1
 if [[ $onlyport =~ ^[0-9]+$ && $onlyport -ge 1000 && $onlyport -le 65535 ]]; then
 sbportjump
 iptables -t nat -A SBHY2PORT -p udp --dport $onlyport -j DNAT --to-destination :$port
@@ -928,9 +942,11 @@ ip6tables -t nat -A SBHY2PORT -p udp --dport $onlyport -j DNAT --to-destination 
 netfilter-persistent save >/dev/null 2>&1
 service iptables save >/dev/null 2>&1
 blue "已确认转发的端口：$onlyport"
+break
 else
-blue "输入的端口不在有效范围内" && fport
+blue "输入的端口不在有效范围内"
 fi
+done
 echo
 }
 
@@ -946,6 +962,7 @@ netfilter-persistent save >/dev/null 2>&1
 service iptables save >/dev/null 2>&1
 }
 
+while true; do
 allports
 green "Vless-reality仅能更改唯一的端口"
 green "Hysteria2支持更改主端口，也支持增删多个转发端口与端口跳跃"
@@ -953,9 +970,9 @@ echo
 green "1：Vless-reality协议 ${yellow}端口:$vl_port${plain}"
 green "2：Hysteria2协议 ${yellow}端口:$hy2_port  转发多端口: $hy2zfport${plain}"
 green "0：返回上层"
-readp "请选择要变更端口的协议：" menu
+readchoice "请选择要变更端口的协议：" menu '^[0-2]?$' || return 1
 if [ "$menu" = "1" ]; then
-vlport
+vlport || continue
 for f in $sbfiles; do
 jq --argjson p "$port_vl_re" '(.inbounds[0].listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
@@ -963,52 +980,52 @@ restartsb && sbshare > /dev/null 2>&1
 blue "Vless-reality端口更改完成"
 echo
 elif [ "$menu" = "2" ]; then
+while true; do
+allports
 green "1：更换Hysteria2主端口 (原多端口自动重置删除)"
 green "2：添加Hysteria2多端口"
 green "3：重置删除Hysteria2多端口"
 green "0：返回上层"
-readp "请选择【0-3】：" menu
+readchoice "请选择【0-3】：" menu '^[0-3]?$' || return 1
 if [ "$menu" = "1" ]; then
+hy2port || continue
 if [ -n "$hy2_ports" ]; then
 hy2deports
-hy2port
-for f in $sbfiles; do
-jq --argjson p "$port_hy2" '(.inbounds[1].listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-done
-restartsb && sbshare > /dev/null 2>&1
-else
-hy2port
-for f in $sbfiles; do
-jq --argjson p "$port_hy2" '(.inbounds[1].listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-done
-restartsb && sbshare > /dev/null 2>&1
 fi
+for f in $sbfiles; do
+jq --argjson p "$port_hy2" '(.inbounds[1].listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+restartsb && sbshare > /dev/null 2>&1
 blue "Hysteria2端口更改完成"
 elif [ "$menu" = "2" ]; then
+while true; do
 green "1：添加Hysteria2范围端口"
 green "2：添加Hysteria2单端口"
 green "0：返回上层"
-readp "请选择【0-2】：" menu
+readchoice "请选择【0-2】：" menu '^[0-2]?$' || return 1
 port=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
 if [ "$menu" = "1" ]; then
-fports && sbshare > /dev/null 2>&1 && changeport
+fports && sbshare > /dev/null 2>&1
 elif [ "$menu" = "2" ]; then
-fport && sbshare > /dev/null 2>&1 && changeport
+fport && sbshare > /dev/null 2>&1
 else
-changeport
+break
 fi
+done
 elif [ "$menu" = "3" ]; then
 if [ -n "$hy2_ports" ]; then
-hy2deports && sbshare > /dev/null 2>&1 yellow "Hysteria2多端口已删除" && changeport
+hy2deports && sbshare > /dev/null 2>&1 && yellow "Hysteria2多端口已删除"
 else
-sbshare > /dev/null 2>&1 && yellow "Hysteria2未设置多端口" && changeport
+sbshare > /dev/null 2>&1 && yellow "Hysteria2未设置多端口"
 fi
 else
-changeport
+break
 fi
+done
 else
-sb
+return
 fi
+done
 }
 
 changeuuid(){
@@ -1018,23 +1035,26 @@ green "全协议的uuid (密码)：$olduuid"
 echo
 yellow "1：自定义全协议的uuid (密码)"
 yellow "0：返回上层"
-readp "请选择【0-1】：" menu
+readchoice "请选择【0-1】：" menu '^[01]?$' || return 1
 if [ "$menu" = "1" ]; then
-readp "输入uuid，必须是uuid格式，不懂就回车(重置并随机生成uuid)：" menu
+while true; do
+readp "输入uuid，必须是uuid格式，不懂就回车(重置并随机生成uuid)，0返回：" menu || return 1
+[[ $menu = 0 ]] && return
 if [ -z "$menu" ]; then
 uuid=$(/etc/s-box/sing-box generate uuid)
 elif [[ "$menu" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
 uuid=$menu
 else
-red "uuid 格式不正确，未做修改" && sleep 3 && return
+red "uuid 格式不正确，未做修改"
+continue
 fi
+break
+done
 for f in $sbfiles; do
 jq --arg u "$uuid" '(.inbounds[0].users[0].uuid) = $u | (.inbounds[1].users[0].password) = $u' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
 blue "已确认uuid (密码)：${uuid}"
-else
-changeserv
 fi
 }
 
@@ -1046,7 +1066,9 @@ jq --arg v "$rrpip" '(.outbounds[0].domain_strategy) = $v' /etc/s-box/sb10.json 
 cp /etc/s-box/sb10.json /etc/s-box/sb.json
 restartsb
 }
-readp "1. IPV4优先\n2. IPV6优先\n3. 仅IPV4\n4. 仅IPV6\n请选择：" choose
+while true; do
+readchoice "1. IPV4优先\n2. IPV6优先\n3. 仅IPV4\n4. 仅IPV6\n0. 返回上层\n请选择：" choose '^[0-4]$' || return 1
+[[ $choose = 0 ]] && return
 if [[ $choose == "1" && -n $v4 ]]; then
 rrpip="prefer_ipv4" && chip && v4_6="IPV4优先($v4)"
 elif [[ $choose == "2" && -n $v6 ]]; then
@@ -1056,11 +1078,14 @@ rrpip="ipv4_only" && chip && v4_6="仅IPV4($v4)"
 elif [[ $choose == "4" && -n $v6 ]]; then
 rrpip="ipv6_only" && chip && v4_6="仅IPV6($v6)"
 else 
-red "当前不存在你选择的IPV4/IPV6地址，或者输入错误" && changeip
+red "当前不存在你选择的IPV4/IPV6地址"
+continue
 fi
-blue "当前已更换的IP优先级：${v4_6}" && sb
+blue "当前已更换的IP优先级：${v4_6}"
+return
+done
 else
-red "仅支持1.10.7内核可用" && exit
+red "仅支持1.10.7内核可用" && return 1
 fi
 }
 
@@ -1073,7 +1098,7 @@ done
 }
 
 setobfs(){
-sbactive
+sbactive || return 1
 obfs_now=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].obfs.password // empty' 2>/dev/null)
 echo
 blue "Hy2混淆（salamander）：把 hy2 流量打乱成随机特征，用于应对专门识别/掐 QUIC 的网络环境"
@@ -1082,23 +1107,22 @@ green "当前状态：已开启"
 else
 yellow "当前状态：未开启（默认）"
 fi
-readp "1：开启/重置混淆密码（随机生成）\n2：关闭混淆\n0：返回上层\n请选择【0-2】：" menu
+readchoice "1：开启/重置混淆密码（随机生成）\n2：关闭混淆\n0：返回上层\n请选择【0-2】：" menu '^[0-2]?$' || return 1
 if [ "$menu" = "1" ]; then
 defobfs
 restartsb && sbshare > /dev/null 2>&1
-green "Hy2混淆已开启，分享链接已刷新（客户端请重新导入节点）" && sleep 2 && sb
+green "Hy2混淆已开启，分享链接已刷新（客户端请重新导入节点）" && sleep 2
 elif [ "$menu" = "2" ]; then
 for f in $sbfiles; do
 jq 'del(.inbounds[1].obfs)' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
-green "Hy2混淆已关闭，分享链接已刷新" && sleep 2 && sb
-else
-sb
+green "Hy2混淆已关闭，分享链接已刷新" && sleep 2
 fi
 }
 
 changefl(){
+while true; do
 mapfile -t fldomains < <(jq -r '.route.rules[] | select(has("domain_suffix") and has("outbound")) | .domain_suffix | join(" ")' /etc/s-box/sb.json)
 fln=("WARP-WireGuard-IPv4优先" "WARP-WireGuard-IPv6优先" "VPS本地-IPv4优先" "VPS本地-IPv6优先")
 echo
@@ -1121,15 +1145,15 @@ blue "5：其余流量出口：$flog"
 echo
 yellow "1-4：给指定域名选通道，多个域名之间留空格 (例：netflix.com openai.com)，回车表示重置为不分流"
 yellow "5：设置上面 4 个通道都没匹配到的域名走哪里 (全局 WARP / 全局直连)"
-readp "请选择【1-5】，回车返回上层：" menu
+readchoice "请选择【1-5】，0或回车返回上层：" menu '^[0-5]?$' || return 1
 if [ "$menu" = "5" ]; then
 echo
 green "当前其余流量出口：$flog"
-readp "1：其余流量走 Cloudflare WARP\n2：其余流量走 VPS 直连 (默认)\n0：返回上层\n请选择【0-2】：" gmen
+readchoice "1：其余流量走 Cloudflare WARP\n2：其余流量走 VPS 直连 (默认)\n0：返回上层\n请选择【0-2】：" gmen '^[0-2]?$' || return 1
 case "$gmen" in
 1) gw11="warp-out"; gw10="warp-IPv4-out"; gwnow="全局走 Cloudflare WARP" ;;
 2) gw11="direct"; gw10="direct"; gwnow="全局走 VPS 直连" ;;
-*) changefl; return ;;
+*) continue ;;
 esac
 for f in $sbfiles; do
 case "$f" in
@@ -1141,14 +1165,15 @@ jq --arg v "$gv" '(.route.rules[-1].outbound) = $v' "$f" > "$f.tmp" && mv "$f.tm
 done
 restartsb && sbshare > /dev/null 2>&1
 green "其余流量出口已设置为：$gwnow"
-sleep 2 && changefl
-return
+sleep 2
+continue
 fi
 if [[ ! "$menu" =~ ^[1-4]$ ]]; then
-changeserv
 return
 fi
-readp "请输入域名：" fl
+while true; do
+readp "请输入域名（0返回）：" fl || return 1
+[[ $fl = 0 ]] && break
 if [ -z "$fl" ]; then
 fl='["yg_kkk"]'
 else
@@ -1156,9 +1181,12 @@ fl=$(printf '%s' "$fl" | tr -s ' \t' ' ' | sed 's/^ //;s/ $//;s/ /","/g')
 fl="[\"$fl\"]"
 fi
 if ! printf '%s' "$fl" | jq -e 'type == "array"' >/dev/null 2>&1; then
-red "域名格式有误，未做修改" && sleep 3 && changefl
-return
+red "域名格式有误，未做修改"
+continue
 fi
+break
+done
+[[ $fl = 0 ]] && continue
 for f in $sbfiles; do
 jq --argjson v "$fl" --argjson channel "$((menu-1))" '
 [.route.rules | to_entries[] | select(.value | has("domain_suffix")) | .key] as $indices |
@@ -1170,14 +1198,16 @@ $pair[0] as $a | $pair[1] as $b |
 done
 restartsb && sbshare > /dev/null 2>&1
 green "分流域名已设置为：$fl"
-sleep 2 && changefl
+sleep 2
+done
 }
 
 changeserv(){
-sbactive
+sbactive || return 1
+while true; do
 echo
 green "Sing-box配置变更选择如下:"
-readp "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：切换IPV4或IPV6的代理优先级 (仅 1.10.7 内核可用)\n6：设置域名分流（WARP-WireGuard / VPS直连）\n7：设置Hy2混淆（salamander，防QUIC特征被识别）\n0：返回上层\n请选择【0-7】：" menu
+readchoice "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：设置出站 IPv4 / IPv6 优先级 (仅 1.10.7 内核可用)\n6：设置域名分流（WARP-WireGuard / VPS直连）\n7：设置Hy2混淆（salamander，防QUIC特征被识别）\n0：返回上层\n请选择【0-7】：" menu '^[0-7]?$' || return 1
 if [ "$menu" = "1" ];then
 setcert
 elif [ "$menu" = "2" ];then
@@ -1193,8 +1223,9 @@ changefl
 elif [ "$menu" = "7" ];then
 setobfs
 else 
-sb
+return
 fi
+done
 }
 
 restartsb(){
@@ -1209,13 +1240,28 @@ fi
 
 stclre(){
 if [[ ! -f '/etc/s-box/sb.json' ]]; then
-red "未正常安装Sing-box" && exit
+red "未正常安装Sing-box"
+readp "回车返回主菜单："
+return 1
 fi
-readp "1：重启\n2：关闭\n请选择：" menu
+local action
+while true; do
+if lanrunning; then action=重启; else action=启动; fi
+if ! command -v apk >/dev/null 2>&1; then
+yellow "启动/重启会开启开机自启，关闭会取消开机自启"
+fi
+readchoice "1：$action\n2：关闭\n0：返回上层\n请选择【0-2】：" menu '^[0-2]$' || return 1
 if [ "$menu" = "1" ]; then
+if [[ $action = 启动 ]] && command -v apk >/dev/null 2>&1; then
+rc-service sing-box start
+else
 restartsb
-sbactive
-green "Sing-box服务已重启\n" && sleep 3 && sb
+fi
+if lanrunning; then
+green "Sing-box服务已$action\n"
+else
+red "Sing-box服务未能$action，请选择9查看日志"
+fi
 elif [ "$menu" = "2" ]; then
 if command -v apk >/dev/null 2>&1; then
 rc-service sing-box stop
@@ -1223,10 +1269,15 @@ else
 systemctl stop sing-box
 systemctl disable sing-box
 fi
-green "Sing-box服务已关闭\n" && sleep 3 && sb
+if lanrunning; then
+red "Sing-box服务未能关闭，请选择9查看日志"
 else
-stclre
+green "Sing-box服务已关闭\n"
 fi
+else
+return
+fi
+done
 }
 
 uncronsb(){
@@ -1251,14 +1302,17 @@ fi
 
 upsbyg(){
 if [[ ! -f '/usr/bin/sb' ]]; then
-red "未正常安装Sing-box-yg" && exit
+red "未正常安装Sing-box-yg"
+readp "回车返回主菜单："
+return 1
 fi
 if lnsb; then
 newv=$(curl -fsSL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1)
 [[ -n $newv ]] && echo "$newv" > /etc/s-box/v
-green "Sing-box-yg安装脚本升级成功" && sleep 5 && sb
+green "Sing-box-yg安装脚本升级成功" && sleep 5
+exec /usr/bin/sb
 else
-red "更新失败，已保留原有脚本" && sleep 3 && sb
+red "更新失败，已保留原有脚本" && sleep 3
 fi
 }
 
@@ -1276,14 +1330,17 @@ inscore=$(/etc/s-box/sing-box version 2>/dev/null | awk '/version/{print $NF}')
 }
 
 upsbcroe(){
-sbactive
+sbactive || return 1
+local upcore lat pre
+while true; do
+upcore=; lat=; pre=
 lapre
 [[ $inscore =~ ^[0-9.]+$ ]] && lat="【已安装v$inscore】" || pre="【已安装v$inscore】"
 green "1：升级/切换Sing-box最新正式版 v$latcore  ${bblue}${lat}${plain}"
 green "2：升级/切换Sing-box最新测试版 v$precore  ${bblue}${pre}${plain}"
 green "3：切换Sing-box某个正式版或测试版，需指定版本号 (建议1.10.0以上版本)"
 green "0：返回上层"
-readp "请选择【0-3】：" menu
+readchoice "请选择【0-3】：" menu '^[0-3]?$' || return 1
 if [ "$menu" = "1" ]; then
 upcore=$(curl -Ls https://github.com/SagerNet/sing-box/releases/latest | grep -oP 'tag/v\K[0-9.]+' | head -n 1)
 elif [ "$menu" = "2" ]; then
@@ -1293,9 +1350,10 @@ echo
 red "注意: 版本号在 https://github.com/SagerNet/sing-box/tags 可查，且有Downloads字样 (必须1.10系或者1.30系以上版本)"
 green "正式版版本号格式：数字.数字.数字 (例：1.10.7   注意，1.10系列内核与1.10以上内核的分流配置格式不同"
 green "测试版版本号格式：数字.数字.数字-alpha或rc或beta.数字 (例：1.13.0-alpha或rc或beta.1)"
-readp "请输入Sing-box版本号：" upcore
+readp "请输入Sing-box版本号（0返回）：" upcore || return 1
+[[ $upcore = 0 ]] && continue
 else
-sb
+return
 fi
 if [[ -n $upcore ]]; then
 green "开始下载并更新Sing-box内核……请稍等"
@@ -1314,14 +1372,16 @@ restartsb && sbshare > /dev/null 2>&1
 else
 red "未找到 /etc/s-box/sb${num}.json，配置未切换，请重装脚本" && sleep 3
 fi
-blue "成功升级/切换 Sing-box 内核版本：$(/etc/s-box/sing-box version | awk '/version/{print $NF}')" && sleep 3 && sb
+blue "成功升级/切换 Sing-box 内核版本：$(/etc/s-box/sing-box version | awk '/version/{print $NF}')" && sleep 3
+return
 else
 rm -rf /etc/s-box/sing-box.tar.gz /etc/s-box/$sbname
-red "下载、解包或校验 Sing-box 内核失败，已保留原内核，请重试" && upsbcroe
+red "下载、解包或校验 Sing-box 内核失败，已保留原内核，请重试"
 fi
 else
-red "版本号检测出错，请重试" && upsbcroe
+red "版本号检测出错，请重试"
 fi
+done
 }
 
 unins(){
@@ -1352,6 +1412,7 @@ sblog(){
 red "退出日志 Ctrl+c"
 if command -v apk >/dev/null 2>&1; then
 yellow "暂不支持alpine查看日志"
+readp "回车返回主菜单："
 else
 #systemctl status sing-box
 journalctl -u sing-box.service -o cat -f
@@ -1360,7 +1421,9 @@ fi
 
 sbactive(){
 if [[ ! -f /etc/s-box/sb.json ]]; then
-red "未正常启动Sing-box，请卸载重装或者选择9查看运行日志反馈" && exit
+red "未找到Sing-box配置，请先选择1安装"
+readp "回车返回："
+return 1
 fi
 }
 
@@ -1381,13 +1444,13 @@ echo
 }
 
 clash_sb_share(){
-sbactive
+sbactive || return 1
 sbshare
 }
 
 bbr(){
 if [[ $vi =~ lxc|openvz ]]; then
-yellow "当前VPS的架构为 $vi，不支持开启原版BBR加速" && sleep 2 && exit 
+yellow "当前VPS的架构为 $vi，不支持开启原版BBR加速" && sleep 2 && return 1
 else
 green "点击任意键，即可开启BBR加速，ctrl+c退出"
 bash <(curl -Ls https://raw.githubusercontent.com/teddysun/across/master/bbr.sh)
@@ -1569,7 +1632,7 @@ lanchain(){
 local choice ip port endpoint index addr
 local -a addresses
 for addr in /etc/s-box/sb10.json /etc/s-box/sb11.json /etc/s-box/sb.json; do
-[[ -f "$addr" ]] || { red "请先安装本 fork 的双协议节点，再配置链路"; return 1; }
+[[ -f "$addr" ]] || { red "请先安装本 fork 的双协议节点，再配置链路"; readp "回车返回主菜单："; return 1; }
 done
 echo
 green "Sing-box 链式代理"
@@ -1611,13 +1674,14 @@ echo
 lanapply public "$endpoint"
 endpoint=
 ;;
-0) sb; return ;;
+0) return ;;
 *) red "请选择 0-5" ;;
 esac
 done
 }
 
-uncronsb || red "清理旧版每日重启任务失败，请检查 crontab"
+mainmenu(){
+while true; do
 clear
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 
 white "Vless-reality-vision、Hysteria2 双协议共存脚本"
@@ -1628,7 +1692,7 @@ green " 2. 删除卸载 Sing-box"
 white "----------------------------------------------------------------------------------"
 green " 3. 变更配置 【证书/名称/域名/UUID/IP优先/分流】"
 green " 4. 更改主端口/添加多端口跳跃复用" 
-green " 5. 关闭/重启 Sing-box"
+green " 5. 启动/关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"
 green " 7. 更新/切换/指定 Sing-box 内核版本"
 white "----------------------------------------------------------------------------------"
@@ -1636,7 +1700,7 @@ green " 8. 刷新并查看节点 【分享链接】"
 green " 9. 查看 Sing-box 运行日志"
 green "10. 一键原版BBR+FQ加速"
 green "11. 填写Hysteria2证书路径"
-green "12. 更换IP刷新本地IP、调整IPV4/IPV6配置输出"
+green "12. 切换入站 IPv4 / IPv6"
 white "----------------------------------------------------------------------------------"
 green "13. Sing-box-yg脚本使用说明书"
 green "14. 链式代理 【内网/公网】"
@@ -1736,7 +1800,7 @@ fi
 if [[ -n $($status_cmd 2>/dev/null | grep -w "$status_pattern") && -f '/etc/s-box/sb.json' ]]; then
 echo -e "Sing-box状态：$blue运行中$plain"
 elif [[ -z $($status_cmd 2>/dev/null | grep -w "$status_pattern") && -f '/etc/s-box/sb.json' ]]; then
-echo -e "Sing-box状态：$yellow未启动，选择9查看日志并反馈，建议切换正式版内核或卸载重装脚本$plain"
+echo -e "Sing-box状态：${yellow}未启动，可选择5启动，选择9查看日志${plain}"
 else
 echo -e "Sing-box状态：$red未安装$plain"
 fi
@@ -1746,21 +1810,26 @@ showprotocol
 fi
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 echo
-readp "请输入数字【0-14】:" Input
+readchoice "请输入数字【0-14】:" Input '^(0|[1-9]|1[0-4])?$' || return
 case "$Input" in  
- 1 ) instsllsingbox;;
- 2 ) unins;;
+ 1 ) instsllsingbox; readp "回车返回主菜单：" ;;
+ 2 ) unins; readp "回车返回主菜单：" ;;
  3 ) changeserv;;
  4 ) changeport;;
  5 ) stclre;;
  6 ) upsbyg;;
  7 ) upsbcroe;;
- 8 ) clash_sb_share;;
+ 8 ) clash_sb_share; readp "回车返回主菜单：" ;;
  9 ) sblog;;
  10 ) bbr;;
  11 ) setcert;;
- 12 ) ipuuid && sbshare;;
- 13 ) sbsm;;
+ 12 ) if ipuuid; then sbshare; readp "回车返回主菜单：" ; fi;;
+ 13 ) sbsm; readp "回车返回主菜单：" ;;
  14 ) lanchain;;
-  * ) exit
+  * ) return
 esac
+done
+}
+
+uncronsb || red "清理旧版每日重启任务失败，请检查 crontab"
+mainmenu
