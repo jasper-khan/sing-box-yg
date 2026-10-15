@@ -931,6 +931,7 @@ jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.
 done
 restartsb && sbshare > /dev/null 2>&1
 blue "Vless-reality伪装域名已更换为：$ym_vl_re"
+yellow "提醒：伪装域名变了，请到客户端更新节点信息（重新导入菜单 8 的分享链接），否则旧节点会连不上"
 sleep 3
 }
 allports(){
