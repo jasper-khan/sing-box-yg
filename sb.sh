@@ -1809,7 +1809,7 @@ echo -e "当前 Sing-box 最新测试版内核：${bblue}${precore}${plain}"
 fi
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 echo -e "VPS状态如下："
-echo -e "系统:$blue$op$plain  \c";echo -e "内核:$blue$version$plain  \c";echo -e "处理器:$blue$cpu$plain  \c";echo -e "虚拟化:$blue$vi$plain  \c";echo -e "TCP拥塞算法:$blue$bbr$plain  默认队列规则:$blue$(sysctl -n net.core.default_qdisc 2>/dev/null)$plain"
+echo -e "系统:$blue$op$plain  \c";echo -e "内核:$blue$version$plain  \c";echo -e "处理器:$blue$cpu$plain  \c";echo -e "虚拟化:$blue$vi$plain  \c";echo -e "拥塞控制:$blue$bbr+$(sysctl -n net.core.default_qdisc 2>/dev/null)$plain"
 v4v6
 [[ -z $v4 ]] && showv4='IPV4地址丢失，请切换至IPV6或者重装Sing-box' || showv4=$v4
 [[ -z $v6 ]] && showv6='IPV6地址丢失，请切换至IPV4或者重装Sing-box' || showv6=$v6
