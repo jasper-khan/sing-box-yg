@@ -235,10 +235,10 @@ if ($text.Contains("tr ' \t' '--'")) {
   $errors += 'node-name input rewrites spaces to dashes again'
 }
 
-# 12c) hy2 hardening: both templates keep the foothill.edu masquerade, the
+# 12c) hy2 hardening: both templates share the Reality disguise domain, the
 # obfs switch exists, share links append obfs params, and sb.json is never
 # piped through the legacy s://.*::g sed (it corrupts JSON containing URLs).
-$masqToken = [regex]::Escape('"masquerade":"https://foothill.edu"')
+$masqToken = [regex]::Escape('"masquerade":"https://${ym_vl_re}"')
 $masqCount = [regex]::Matches($text, $masqToken).Count
 if ($masqCount -ne 2) {
   $errors += "hy2 masquerade missing from kernel templates (found $masqCount of 2)"

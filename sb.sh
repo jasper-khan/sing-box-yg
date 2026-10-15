@@ -387,7 +387,7 @@ cat > /etc/s-box/sb10.json <<EOF
             }
         ],
         "ignore_client_bandwidth":false,
-        "masquerade":"https://foothill.edu",
+        "masquerade":"https://${ym_vl_re}",
         "tls": {
             "enabled": true,
             "alpn": [
@@ -534,7 +534,7 @@ cat > /etc/s-box/sb11.json <<EOF
             }
         ],
         "ignore_client_bandwidth":false,
-        "masquerade":"https://foothill.edu",
+        "masquerade":"https://${ym_vl_re}",
         "tls": {
             "enabled": true,
             "alpn": [
@@ -923,15 +923,15 @@ vl_na="当前伪装域名：$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.s
 green "$vl_na"
 autoym
 ym_auto=$ym_vl_re
-readp "检测到城市：${sb_city:-未识别}，自动选择的伪装域名：$ym_auto\n请输入新的Reality伪装域名 (回车使用上面自动选择的域名，0返回)：" ym_vl_re || return 1
+readp "检测到城市：${sb_city:-未识别}，自动选择的伪装域名：$ym_auto\n请输入新的VLESS/Hy2伪装域名 (回车使用上面自动选择的域名，0返回)：" ym_vl_re || return 1
 [[ $ym_vl_re = 0 ]] && return
 ym_vl_re=${ym_vl_re:-$ym_auto}
 for f in $sbfiles; do
-jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v | (.inbounds[1].masquerade) = ("https://" + $v)' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
-blue "Vless-reality伪装域名已更换为：$ym_vl_re"
-yellow "提醒：伪装域名变了，请到客户端更新节点信息（重新导入菜单 8 的分享链接），否则旧节点会连不上"
+blue "VLESS/Hy2伪装域名已更换为：$ym_vl_re"
+yellow "提醒：VLESS伪装域名变了，请到客户端更新VLESS节点信息（重新导入菜单 8 的分享链接），否则旧节点会连不上"
 sleep 3
 }
 allports(){

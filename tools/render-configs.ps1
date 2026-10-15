@@ -191,8 +191,8 @@ foreach ($name in @('sb10', 'sb11')) {
         Stop-WithError "$name.json Reality server_name and handshake.server must stay apple.com."
     }
 
-    if ([string]$json.inbounds[1].masquerade -cne 'https://foothill.edu') {
-        Stop-WithError "$name.json hy2 inbound masquerade must stay https://foothill.edu."
+    if ([string]$json.inbounds[1].masquerade -cne ('https://' + $tls.server_name)) {
+        Stop-WithError "$name.json hy2 inbound masquerade must follow the Reality domain."
     }
     Assert-ExactTypes -Name $name -Kind 'outbound' -Expected @($expectedOutbounds[$name]) `
         -Actual @($json.outbounds | ForEach-Object { [string]$_.type })
