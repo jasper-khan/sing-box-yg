@@ -277,6 +277,12 @@ if (-not (Test-Path $versionFile)) {
   $verText = [System.IO.File]::ReadAllText($versionFile, [System.Text.Encoding]::UTF8)
   if ($verText -notmatch '-fork\.') { $errors += 'version file lost the -fork. version tag' }
   if ($verText -notmatch 'github\.com/jasper-khan/sing-box-yg') { $errors += 'version file no longer links to this fork' }
+  if ($verText -notmatch '(?m)^\u66f4\u65b0\u5185\u5bb9\uFF1A') { $errors += 'version file lost the changelog marker the panel slices on' }
+}
+# the main-menu update notice must print only the current release block, not the
+# whole history; the slice lives in the curl pipeline next to "version | awk".
+if (-not $text.Contains("/version | awk 'f && /^fork\.[0-9]/{exit}")) {
+  $errors += 'main menu prints the whole version history again'
 }
 
 # 17) changeuuid() must rewrite the hysteria2 password as well, otherwise the
