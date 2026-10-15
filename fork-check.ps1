@@ -285,6 +285,16 @@ if (-not $text.Contains("/version | awk 'f && /^fork\.[0-9]/{exit}")) {
   $errors += 'main menu prints the whole version history again'
 }
 
+# 16b) the VPS status line shows city + org, so the location lookup must stay on
+#      ipwho.is and keep the city field.
+$lv = [regex]::Match($text, '(?ms)^v4v6\(\)\{.*?^\}')
+if (-not $lv.Success) {
+  $errors += 'v4v6() not found'
+} else {
+  if ($lv.Value -notmatch 'ipwho\.is') { $errors += 'VPS location lookup no longer uses ipwho.is' }
+  if ($lv.Value -notmatch '\.city') { $errors += 'VPS location lookup dropped the city field' }
+}
+
 # 17) changeuuid() must rewrite the hysteria2 password as well, otherwise the
 #     second protocol silently keeps the old password after a UUID change.
 $cu = [regex]::Match($text, '(?ms)^changeuuid\(\)\{.*?^\}')
