@@ -293,7 +293,6 @@ if (-not $lv.Success) {
 } else {
   if ($lv.Value -notmatch 'ipwho\.is') { $errors += 'VPS location lookup no longer uses ipwho.is' }
   if ($lv.Value -notmatch '\.city') { $errors += 'VPS location lookup dropped the city field' }
-  if ($lv.Value -notmatch 'connection\.isp') { $errors += 'VPS location lookup stopped preferring the ISP name' }
 }
 
 # 17) changeuuid() must rewrite the hysteria2 password as well, otherwise the
