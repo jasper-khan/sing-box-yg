@@ -152,8 +152,9 @@ if ($text -notmatch 'Vless-reality\uFF1ATCP \$port_vl_re' -or
     $text -notmatch 'Hysteria-2\uFF1AUDP \$port_hy2') {
   $errors += 'install no longer prints the VLESS/Hysteria2 inbound port reminder'
 }
-# 9) GitLab publishing and Telegram push must stay removed, and "变更配置"
-#    must keep the 7 retained interaction points.
+# 9) GitLab publishing and Telegram push must stay removed; "变更配置"
+#    keeps the 6 retained interaction points, and the inbound/outbound IP
+#    switches live in the main-menu 12 entry.
 $pushHits = [regex]::Matches($text, '(?i)gitlab|telegram|TG通知|电报|sbtg\.sh|gitpush\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($pushHits) {
   $errors += "gitlab/telegram feature reappeared: $($pushHits -join ', ')"
@@ -162,12 +163,27 @@ $cs = [regex]::Match($text, '(?ms)^changeserv\(\)\{.*?^\}')
 if (-not $cs.Success) {
   $errors += 'changeserv menu not found'
 } else {
-  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changeip', 'changefl', 'setobfs') {
+  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changefl', 'setobfs') {
     if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
   }
   $csOpts = [regex]::Matches($cs.Value, '"\$menu"\s*=\s*"([0-9]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
-  if (($csOpts -join ',') -ne '1,2,3,4,5,6,7') {
-    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5,6,7)"
+  if (($csOpts -join ',') -ne '1,2,3,4,5,6') {
+    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5,6)"
+  }
+}
+
+$ips = [regex]::Match($text, '(?ms)^ipswitch\(\)\{.*?^\}')
+if (-not $ips.Success) {
+  $errors += 'IP switch submenu (main menu 12) not found'
+} else {
+  foreach ($fn in 'ipuuid', 'changeip') {
+    if ($ips.Value -notmatch "\b$fn\b") { $errors += "IP switch submenu lost $fn" }
+  }
+  if ($text -notmatch '(?m)^\s*12\s*\)\s*ipswitch;;') {
+    $errors += 'main menu 12 no longer opens the IP switch submenu'
+  }
+  if ($text -notmatch '12\. \u5207\u6362\u5165\u7ad9/\u51fa\u7ad9 IPv4 / IPv6') {
+    $errors += 'main menu 12 label no longer names inbound and outbound together'
   }
 }
 
@@ -325,7 +341,7 @@ if (-not $flfn.Success) {
     $errors += 'changefl() no longer writes the split domains by JSON path'
   }
   if ($flfn.Value -notmatch '\$menu" = "5"') {
-    $errors += 'changefl() lost the global-egress option (menu 3 -> 6 -> 5)'
+    $errors += 'changefl() lost the global-egress option (menu 3 -> 5 -> 5)'
   }
   if ($flfn.Value -notmatch '\(\.route\.rules\[-1\]\.outbound\)') {
     $errors += 'changefl() no longer writes the global egress by JSON path'

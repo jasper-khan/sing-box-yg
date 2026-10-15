@@ -663,6 +663,7 @@ fi
 }
 
 ipuuid(){
+local fam=${1:-} server_pick
 if command -v apk >/dev/null 2>&1; then
 status_cmd="rc-service sing-box status"
 status_pattern="started"
@@ -672,7 +673,15 @@ status_pattern="active"
 fi
 if [[ -n $($status_cmd 2>/dev/null | grep -w "$status_pattern") && -f '/etc/s-box/sb.json' ]]; then
 v4v6
-if [[ -n $v4 && -n $v6 ]]; then
+if [[ -n $fam ]]; then
+if [[ $fam = 4 ]]; then server_pick=$v4; else server_pick=$v6; fi
+if [[ -z $server_pick ]]; then
+red "本机没有检测到 IPv$fam 地址，未做修改"
+return 1
+fi
+[[ $fam = 6 ]] && server_pick="[$server_pick]"
+echo "$server_pick" > /etc/s-box/server_ip.log
+elif [[ -n $v4 && -n $v6 ]]; then
 green "切换入站 IPv4 / IPv6"
 yellow "1：刷新本地IP，使用IPV4配置输出 (回车默认) "
 yellow "2：刷新本地IP，使用IPV6配置输出"
@@ -700,9 +709,23 @@ fi
 fi
 else
 red "Sing-box服务未运行"
-readp "回车返回主菜单："
 return 1
 fi
+}
+ipswitch(){
+echo
+green "切换入站 / 出站 IPv4 / IPv6"
+yellow "1：入站使用 IPv4（刷新本地 IP 并更新分享链接）"
+yellow "2：入站使用 IPv6（刷新本地 IP 并更新分享链接）"
+yellow "3：设置出站 IPv4 / IPv6 优先级（仅 1.10.7 内核可用）"
+yellow "0：返回主菜单"
+readchoice "请选择【0-3】：" menu '^[0-3]?$' || return 1
+case "$menu" in
+1) if ipuuid 4; then sbshare; fi; readp "回车返回主菜单：" ;;
+2) if ipuuid 6; then sbshare; fi; readp "回车返回主菜单：" ;;
+3) changeip; readp "回车返回主菜单：" ;;
+*) return ;;
+esac
 }
 
 result_vl_hy2(){
@@ -1207,7 +1230,7 @@ sbactive || return 1
 while true; do
 echo
 green "Sing-box配置变更选择如下:"
-readchoice "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：设置出站 IPv4 / IPv6 优先级 (仅 1.10.7 内核可用)\n6：设置域名分流（WARP-WireGuard / VPS直连）\n7：设置Hy2混淆（salamander，防QUIC特征被识别）\n0：返回上层\n请选择【0-7】：" menu '^[0-7]?$' || return 1
+readchoice "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：设置域名分流（WARP-WireGuard / VPS直连）\n6：设置Hy2混淆（salamander，防QUIC特征被识别）\n0：返回上层\n请选择【0-6】：" menu '^[0-6]?$' || return 1
 if [ "$menu" = "1" ];then
 setcert
 elif [ "$menu" = "2" ];then
@@ -1217,10 +1240,8 @@ changeym
 elif [ "$menu" = "4" ];then
 changeuuid
 elif [ "$menu" = "5" ];then
-changeip
-elif [ "$menu" = "6" ];then
 changefl
-elif [ "$menu" = "7" ];then
+elif [ "$menu" = "6" ];then
 setobfs
 else 
 return
@@ -1690,7 +1711,7 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 green " 1. 一键安装 Sing-box" 
 green " 2. 删除卸载 Sing-box"
 white "----------------------------------------------------------------------------------"
-green " 3. 变更配置 【证书/名称/域名/UUID/IP优先/分流】"
+green " 3. 变更配置 【证书/名称/域名/UUID/分流/混淆】"
 green " 4. 更改主端口/添加多端口跳跃复用" 
 green " 5. 启动/关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"
@@ -1700,7 +1721,7 @@ green " 8. 刷新并查看节点 【分享链接】"
 green " 9. 查看 Sing-box 运行日志"
 green "10. 一键原版BBR+FQ加速"
 green "11. 填写Hysteria2证书路径"
-green "12. 切换入站 IPv4 / IPv6"
+green "12. 切换入站/出站 IPv4 / IPv6"
 white "----------------------------------------------------------------------------------"
 green "13. Sing-box-yg脚本使用说明书"
 green "14. 链式代理 【内网/公网】"
@@ -1823,7 +1844,7 @@ case "$Input" in
  9 ) sblog;;
  10 ) bbr;;
  11 ) setcert;;
- 12 ) if ipuuid; then sbshare; readp "回车返回主菜单：" ; fi;;
+ 12 ) ipswitch;;
  13 ) sbsm; readp "回车返回主菜单：" ;;
  14 ) lanchain;;
   * ) return
