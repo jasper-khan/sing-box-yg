@@ -1765,8 +1765,8 @@ echo -e "当前 Sing-box-yg 脚本最新版：${bblue}${insV}${plain} (已安装
 else
 echo -e "当前 Sing-box-yg 脚本版本号：${bblue}${insV}${plain}"
 echo -e "检测到最新 Sing-box-yg 脚本版本号：${yellow}${latestV}${plain} (可选择6进行更新)"
-curN=$(echo "$insV" | sed -n 's/.*fork\.\([0-9]*\).*/\1/p')
-echo -e "${yellow}$(curl -sL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -v cur="$curN" '/^更新内容/{f=1} f{if(/^历史更新/)next;t=$0;sub(/^[0-9]+、/,"",t);if(match(t,/^fork\.[0-9]+/)&&substr(t,6,RLENGTH-5)+0<=cur)exit;print}')${plain}"
+curN=${insV##*fork.}
+echo -e "${yellow}$(curl -sL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -v cur="$curN" '/^更新内容/{f=1} f{t=$0;sub(/^[0-9]+、/,"",t);if(match(t,/^fork\.[0-9]+/)&&substr(t,6,RLENGTH-5)+0<=cur)exit;print}')${plain}"
 fi
 else
 echo -e "当前 Sing-box-yg 脚本版本号：${bblue}${latestV}${plain}"
