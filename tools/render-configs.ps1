@@ -101,7 +101,7 @@ function Convert-TemplateToJson {
         [string]$Template
     )
 
-    $rendered = [regex]::Replace($Template, '\$\{ym_vl_re\}|\$ym_vl_re\b', 'foothill.edu')
+    $rendered = [regex]::Replace($Template, '\$\{ym_vl_re\}|\$ym_vl_re\b', 'apple.com')
     $rendered = [regex]::Replace($rendered, '\$\{[^}\r\n]*\}', '0')
     $rendered = Remove-CommandSubstitutions -Text $rendered
 
@@ -187,8 +187,8 @@ foreach ($name in @('sb10', 'sb11')) {
         -Actual @($json.inbounds | ForEach-Object { [string]$_.type })
 
     $tls = $json.inbounds[0].tls
-    if ([string]$tls.server_name -cne 'foothill.edu' -or [string]$tls.reality.handshake.server -cne 'foothill.edu') {
-        Stop-WithError "$name.json Reality server_name and handshake.server must stay foothill.edu."
+    if ([string]$tls.server_name -cne 'apple.com' -or [string]$tls.reality.handshake.server -cne 'apple.com') {
+        Stop-WithError "$name.json Reality server_name and handshake.server must stay apple.com."
     }
 
     if ([string]$json.inbounds[1].masquerade -cne 'https://foothill.edu') {

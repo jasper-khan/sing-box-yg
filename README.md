@@ -2,7 +2,7 @@
 
 > 边界：本 fork 只维护 VPS 版 `sb.sh`（vless-reality + hysteria2 两个协议）。上游的 Serv00/Hostuno 相关文件（`serv00.sh`、`serv00keep.sh`、`serv00.yml`、`SSH.yml`、`kp.sh`、`sb.txt`、`app.js`、`index.html`、`sversion`、`workers_keep.js`、`sbwpph_amd64`、`sbwpph_arm64`、`.github/workflows/main.yml`）已从本 fork 删除；需要这些文件请去上游仓库。上游项目：[yonggekkk/sing-box-yg](https://github.com/yonggekkk/sing-box-yg)。
 
-### 本 fork 说明（仅 vless-reality + hysteria2，默认伪装域名 = foothill.edu）
+### 本 fork 说明（仅 vless-reality + hysteria2，伪装域名按检测到的城市自动选择，兜底上游默认 apple.com）
 
 * 公网节点只有两个协议：vless-reality 与 hysteria2。可选的内网链路使用只监听私网地址的 SS none。vmess-ws/Argo、tuic5、anytls 已从脚本中删除（服务端 inbound、客户端配置、订阅分享、菜单、端口、卸载逻辑均不含这三种协议）。
 * 支持纯 IPv4、纯 IPv6、双栈 VPS；amd64/arm64 架构；Alpine 系统下不支持查看运行日志。
@@ -20,14 +20,14 @@
 * 本地IP订阅（busybox httpd 订阅服务）已删除：不再有 `subport.log` / `subtoken.log` / `/root/websbox`，也不会占额外端口。
 * GitLab 订阅发布与 Telegram 推送已删除：脚本里不再有这两项功能，“变更配置”菜单保留 6 项（证书路径 / 节点名称 / Reality 域名 / UUID / 域名分流 / Hy2 混淆），出入站 IPv4/IPv6 切换统一收在主菜单 12，依赖里也不再安装 `git`、`expect`。
 * 节点名称：安装时会问一次（回车 = 默认主机名），装完可用菜单 `3` → `2` 随时修改（输入 `0` 恢复默认主机名）。客户端里显示的就是你输入的名字（空格保留，不再替换成 `-`；只去掉 `#`），**不会再自动加 `vl-reality-` / `hy2-` 前缀**；两条节点同名，靠协议与端口区分。改完自动刷新分享链接。
-* vless-reality 默认 SNI/伪装域名固定为 `foothill.edu`：安装时不询问（只打印提示），需要更换用菜单 `3` → `3`。
+* vless-reality 的 SNI/伪装域名按城市自动选择：安装时读取 ipwho.is 返回的 `city`，命中内置城市表（洛杉矶 `www.compton.edu`、湾区 `foothill.edu`、香港 `www.ust.hk`、东京 `www.tnm.jp`、西雅图 `www.eskimo.com`、达拉斯 `unt.edu`、纽约 `adelphi.edu`、大阪 `www.osaka-u.ac.jp`、首尔 `uos.ac.kr`、新加坡 `a-star.edu.sg`、台北 `www.ntust.edu.tw`、法兰克福 `uni-frankfurt.de`、阿姆斯特丹 `vu.nl`、伦敦 `kew.org`、巴黎 `inria.fr`）就用对应域名；表外城市或查询失败用上游默认 `apple.com`。安装时不询问（只打印选中结果），需要更换用菜单 `3` → `3`，回车即用自动选中的域名。
 * 自己申请的 Hysteria2 证书：用菜单 `3` → `1`（或主菜单 `11`）填写证书文件路径与私钥文件路径，脚本会校验文件存在、写入配置并重启服务。不填就继续用自签证书。
 * Hy2 防探测与混淆：两个内核模板的 hysteria2 端口默认带 `masquerade: https://foothill.edu`（探测请求反代 foothill.edu，不再裸回 404）；salamander 混淆默认开启，安装时自动生成随机密码写入 sb10/sb11/sb.json，分享链接自动带 obfs 参数；菜单 `3` → `7` 可关闭或重置（改完自动刷新链接，客户端需重新导入）。
 * 脚本自更新、版本检查与安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
 * 链式代理（菜单 `14`）：支持内网与公网，由 sing-box 原生转发。内网落地选择网卡上的私网 IPv4 与端口，中转粘贴 `内网IP:端口`，经 SS none 连接落地；公网中转粘贴落地机的本 fork VLESS+Reality 完整链接，经 VLESS+Reality 连接落地。两种方式都把中转机 VLESS、Hy2 的流量交给落地机，客户端直接使用中转机菜单 `8` 的节点。SS none 仅用于内网，不提供代理层加密或认证，仅绑定指定私网地址；脚本不修改防火墙。同一台机器只保留一条当前链路，切换时替换原链路。取消链路只移除本功能的入口、出站和路由规则，保留原有节点、分流与 WARP 设置。配置先校验，公网落地连接另做实际验证，应用失败自动恢复；`sb10.json`、`sb11.json` 与当前配置同步保存，切换内核不会丢失链路。
-* 仓库自带自动化守卫：`.github/workflows/fork-check.yml` 在每次 push / PR 自动跑 `bash -n sb.sh`、`fork-check.ps1`、`tools/render-configs.ps1`。合并上游后如果这些 fork 边界被改丢（协议范围、`foothill.edu`、`fp=firefox`、WARP-WireGuard 结构、域名分流菜单、变更配置选项数等），GitHub 上会直接变成红灯，不会静默通过。
+* 仓库自带自动化守卫：`.github/workflows/fork-check.yml` 在每次 push / PR 自动跑 `bash -n sb.sh`、`fork-check.ps1`、`tools/render-configs.ps1`。合并上游后如果这些 fork 边界被改丢（协议范围、城市伪装域名表与 `apple.com` 兜底、`fp=firefox`、WARP-WireGuard 结构、域名分流菜单、变更配置选项数等），GitHub 上会直接变成红灯，不会静默通过。
 * 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示这些不变量都还在——默认伪装域名、服务端模板结构、协议范围、自更新与版本 URL 全部归本 fork（含 `lnsb()`/`upsbyg()` 函数体内的 URL）、`version` 文件归本 fork、UUID 变更同步 hy2 密码、分享链接指纹 `fp=firefox`、“不再按行号改配置 / 不再生成客户端配置”、“GitLab/Telegram 不得回流”、“本地IP订阅服务不得回流”、上游推广字样不得回流、WARP-WireGuard 通道结构（账户注册函数 + 两个模板的 wireguard 出站/分流域名规则 + 按 JSON 路径写入的分流菜单）、“变更配置菜单保持 6 项与主菜单 12 出入站菜单”与“socat 安装及每日重启创建不得回流”。
-* 服务端配置另可用 `tools/render-configs.ps1` 渲染校验：按 JSON 字段检查 Reality 的 `server_name` 与 `handshake.server` 默认值为 `foothill.edu`，不限制字段所在行号；inbounds 只允许 `vless,hysteria2`；sb10 出站为 `direct`×5 + `wireguard` + `block`（含 4 条分流规则），sb11 出站为 `direct` + `endpoints` 的 wireguard（规则必须是 `sniff` + 4 组 resolve/outbound 对 + 兜底，共 10 条）。
+* 服务端配置另可用 `tools/render-configs.ps1` 渲染校验：按 JSON 字段检查 Reality 的 `server_name` 与 `handshake.server` 默认值为 `apple.com`，不限制字段所在行号；inbounds 只允许 `vless,hysteria2`；sb10 出站为 `direct`×5 + `wireguard` + `block`（含 4 条分流规则），sb11 出站为 `direct` + `endpoints` 的 wireguard（规则必须是 `sniff` + 4 组 resolve/outbound 对 + 兜底，共 10 条）。
 * 从 fork.11 之前的版本（含旧的多协议版本）升级：必须**先卸载再重装**。菜单 2 卸载后会删除 `/usr/bin/sb`，请重新执行本 README 的安装命令并选菜单 1。只点菜单 6"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`，也不会注册 WARP-WireGuard 账户（菜单 3 → 5 的域名分流会读到旧结构）；旧配置里残留的其它协议 inbound 不会被清理；卸载只清理本 fork 组件（sing-box 服务、`/etc/s-box`、`/usr/bin/sb`、旧版固定每日重启任务、SBHY2PORT 链、脚本目录的 `sbyg_update` 标记），不再处理旧版 Argo/WARP/websbox 等残留。
 
 ### 当前菜单结构
@@ -73,7 +73,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/s
 ### 同步上游更新
 
 1. `git fetch upstream`
-2. `git merge upstream/main`：不要使用 `-X ours`。冲突时手工解决，明确保留本 fork 的删除边界（vmess/Argo、tuic、anytls、WARP-Socks5/warp-plus、端点 IP 优选、GitLab 订阅、Telegram 推送、本地IP订阅服务相关功能不得重新引入，删除处保持删除）；WARP-WireGuard 出站与域名分流（菜单 `3` → `6`，fork.11 结构）属于要保留的功能。接受 vless-reality、hysteria2 路径上的上游改动，并保留 `foothill.edu` 默认值、`fp=firefox` 默认指纹与指向本 fork 的自更新/版本 URL。
+2. `git merge upstream/main`：不要使用 `-X ours`。冲突时手工解决，明确保留本 fork 的删除边界（vmess/Argo、tuic、anytls、WARP-Socks5/warp-plus、端点 IP 优选、GitLab 订阅、Telegram 推送、本地IP订阅服务相关功能不得重新引入，删除处保持删除）；WARP-WireGuard 出站与域名分流（菜单 `3` → `6`，fork.11 结构）属于要保留的功能。接受 vless-reality、hysteria2 路径上的上游改动，并保留 `apple.com` 默认值（上游默认）、城市伪装域名表、`fp=firefox` 默认指纹与指向本 fork 的自更新/版本 URL。
 3. 合并后依次运行：`bash -n sb.sh`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`、`powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/render-configs.ps1`；三条全绿再 push，push 后 GitHub Actions 会再跑一遍同样的检查。
 4. 不要用会把 fork 改动真正覆盖掉的操作：`git reset --hard upstream/main`、`git checkout upstream/main -- .`、`git merge -X theirs upstream/main`。要合上游就用第 2 步的普通 merge，冲突必须人工按 fork 边界解决。
 5. 服务端配置的读写已全部改为按 jq 字段路径（`.inbounds[0]` = vless-reality、`.inbounds[1]` = hysteria2），上游增删字段不再影响这些功能；脚本中已不存在按行号改写配置的 sed，`fork-check.ps1` 会守住这一点。

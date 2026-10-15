@@ -161,6 +161,31 @@ ipv=prefer_ipv4
 fi
 }
 
+autoym(){
+local c
+sb_city=$(curl -s4m5 -k https://ipwho.is/ | jq -r 'select(.success) | .city // empty' 2>/dev/null)
+[[ -z $sb_city ]] && sb_city=$(curl -s6m5 -k https://ipwho.is/ | jq -r 'select(.success) | .city // empty' 2>/dev/null)
+c=$(printf '%s' "$sb_city" | tr 'A-Z' 'a-z')
+case "$c" in
+*"los angeles"*) ym_vl_re=www.compton.edu ;;
+*"san jose"*|*"santa clara"*|*sunnyvale*|*"mountain view"*|*"palo alto"*|*"san francisco"*|*"los altos"*) ym_vl_re=foothill.edu ;;
+*"hong kong"*) ym_vl_re=www.ust.hk ;;
+*tokyo*) ym_vl_re=www.tnm.jp ;;
+*seattle*) ym_vl_re=www.eskimo.com ;;
+*dallas*) ym_vl_re=unt.edu ;;
+*"new york"*) ym_vl_re=adelphi.edu ;;
+*osaka*) ym_vl_re=www.osaka-u.ac.jp ;;
+*seoul*) ym_vl_re=uos.ac.kr ;;
+*singapore*) ym_vl_re=a-star.edu.sg ;;
+*taipei*) ym_vl_re=www.ntust.edu.tw ;;
+*frankfurt*) ym_vl_re=uni-frankfurt.de ;;
+*amsterdam*) ym_vl_re=vu.nl ;;
+*london*) ym_vl_re=kew.org ;;
+*paris*) ym_vl_re=inria.fr ;;
+*) ym_vl_re=apple.com ;;
+esac
+}
+
 inssb(){
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 green "使用哪个内核版本？"
@@ -192,7 +217,8 @@ fi
 }
 
 inscertificate(){
-ym_vl_re=foothill.edu
+ym_vl_re=apple.com
+autoym
 certificatec_hy2='/etc/s-box/cert.pem'
 certificatep_hy2='/etc/s-box/private.key'
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -208,7 +234,7 @@ else
 red "生成bing自签证书失败" && exit
 fi
 echo
-blue "Vless-reality的SNI域名默认为 foothill.edu"
+blue "Vless-reality的SNI域名：$ym_vl_re（依据城市：${sb_city:-未识别}）"
 }
 
 chooseport(){
@@ -895,9 +921,11 @@ changeym(){
 echo
 vl_na="当前伪装域名：$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')"
 green "$vl_na"
-readp "请输入新的Reality伪装域名 (回车使用foothill.edu，0返回)：" ym_vl_re || return 1
+autoym
+ym_auto=$ym_vl_re
+readp "检测到城市：${sb_city:-未识别}，自动选择的伪装域名：$ym_auto\n请输入新的Reality伪装域名 (回车使用上面自动选择的域名，0返回)：" ym_vl_re || return 1
 [[ $ym_vl_re = 0 ]] && return
-ym_vl_re=${ym_vl_re:-foothill.edu}
+ym_vl_re=${ym_vl_re:-$ym_auto}
 for f in $sbfiles; do
 jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done

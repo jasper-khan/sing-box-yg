@@ -1,5 +1,6 @@
-# Fork invariant check: vless-reality disguise domain stays foothill.edu,
-# and self-update URLs point at this fork.
+# Fork invariant check: the vless-reality disguise domain stays on this fork's
+# list (upstream default apple.com plus the per-city table), and self-update URLs
+# point at this fork.
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File .\fork-check.ps1
 # Exit code 0 = pass, 1 = invariant broken.
 [CmdletBinding()]
@@ -14,20 +15,40 @@ $errors = @()
 $text   = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
 $lines  = $text -split '\r?\n'
 
-# 1) Every ym_vl_re assignment must be foothill.edu
-#    (a new assignment added elsewhere by upstream shows up here)
+# 1) ym_vl_re assignments must stay inside the fork's list: the static default is
+#    upstream's apple.com, every other assignment is a city-table domain, and all
+#    city-table domains must still be present (upstream edits show up here).
+$cityYms = 'www.compton.edu', 'foothill.edu', 'www.ust.hk', 'www.tnm.jp', 'www.eskimo.com',
+           'unt.edu', 'adelphi.edu', 'www.osaka-u.ac.jp', 'uos.ac.kr', 'a-star.edu.sg',
+           'www.ntust.edu.tw', 'uni-frankfurt.de', 'vu.nl', 'kew.org', 'inria.fr'
 $assigns = @()
 foreach ($line in $lines) {
-  if ($line -match '^\s*(?:export\s+)?ym_vl_re=(.*)$') {
+  if ($line -match 'ym_vl_re=([^\s;]+)') {
     $assigns += $Matches[1].Trim().Trim([char[]](34, 39))
   }
 }
 if ($assigns.Count -lt 1) {
   $errors += "no ym_vl_re assignment found"
 }
-$bad = @($assigns | Where-Object { $_ -ne 'foothill.edu' -and $_ -ne '${menu:-foothill.edu}' -and $_ -ne '${ym_vl_re:-foothill.edu}' })
+if ($text -notmatch '(?m)^ym_vl_re=apple\.com$') {
+  $errors += 'static disguise default is no longer the upstream apple.com'
+}
+$allowedYms = @('apple.com') + $cityYms
+$bad = @($assigns | Where-Object { $allowedYms -notcontains $_ -and $_ -notmatch '\$' })
 if ($bad.Count) {
-  $errors += "ym_vl_re assigned to non-foothill value: $($bad -join ' | ')"
+  $errors += "ym_vl_re assigned to a domain outside the fork list: $($bad -join ' | ')"
+}
+$missingYms = @($cityYms | Where-Object { $assigns -notcontains $_ })
+if ($missingYms.Count) {
+  $errors += "city disguise table lost domains: $($missingYms -join ', ')"
+}
+$ymfn = [regex]::Match($text, '(?ms)^autoym\(\)\{.*?^\}')
+if (-not $ymfn.Success) {
+  $errors += 'autoym() city-to-domain picker not found'
+} else {
+  if ($ymfn.Value -notmatch 'ipwho\.is') { $errors += 'autoym() no longer reads the city from ipwho.is' }
+  if ($ymfn.Value -notmatch '\.city') { $errors += 'autoym() dropped the city field' }
+  if ($ymfn.Value -notmatch 'ym_vl_re=apple\.com') { $errors += 'autoym() lost the apple.com fallback' }
 }
 
 # 2) Reality domain fields are checked after JSON rendering in render-configs.ps1.
