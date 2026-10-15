@@ -300,10 +300,11 @@ if (-not (Test-Path $versionFile)) {
   if ($verText -notmatch 'github\.com/jasper-khan/sing-box-yg') { $errors += 'version file no longer links to this fork' }
   if ($verText -notmatch '(?m)^\u66f4\u65b0\u5185\u5bb9\uFF1A') { $errors += 'version file lost the changelog marker the panel slices on' }
 }
-# the main-menu update notice must print only the current release block, not the
-# whole history; the slice lives in the curl pipeline next to "version | awk".
-if (-not $text.Contains("/version | awk 'f && /^fork\.[0-9]/{exit}")) {
-  $errors += 'main menu prints the whole version history again'
+# the main-menu update notice must print every release newer than the installed
+# one and stop there, instead of dumping the whole history or only the newest
+# block; the slice lives in the curl pipeline next to "version | awk".
+if (-not ($text.Contains('/version | awk -v cur="$curN"') -and $text.Contains("substr(t,6,RLENGTH-5)+0<=cur"))) {
+  $errors += 'main menu no longer slices the version history at the installed fork version'
 }
 
 # 16b) the VPS status line shows city + org, so the location lookup must stay on
