@@ -86,11 +86,11 @@ if (-not $upsbyg.Success) {
   $errors += 'upsbyg() no longer reads the version file from this fork'
 }
 
-# 5) public-node scope: only vless-reality + hysteria2 may remain.
+# 5) public-node scope: vless-reality + hysteria2, with optional AnyTLS + REALITY.
 #    Optional LAN chaining adds SS none at runtime, outside the public templates.
 #    Removed protocols must be gone, and the Argo tunnel feature must not come back.
 #    (unins/uncronsb must not reference removed-feature leftovers either: see 5b)
-$removed = [regex]::Matches($text, '(?i)\b(?:vmess|tuic|anytls)\w*|\bargo\w*|cfargo|argoym|cloudflared') | ForEach-Object { $_.Value } | Sort-Object -Unique
+$removed = [regex]::Matches($text, '(?i)\b(?:vmess|tuic)\w*|\bargo\w*|cfargo|argoym|cloudflared') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($removed) {
   $errors += "removed protocol code reappeared: $($removed -join ', ')"
 }
@@ -130,9 +130,8 @@ if ($lineSeds.Count) {
   $errors += "fixed-line sed edits are back ($($lineSeds.Count)); they break silently on upstream field changes"
 }
 
-# 7) client-config generation must stay removed (deleting legacy leftovers is allowed):
-#    this fork ships share links + jhsub only
-$clientGen = [regex]::Matches($text, 'cat > /etc/s-box/(sbox\.json|clmi\.yaml)|\b(sball|clall|sb_client|sbhy2ports)\s*\(\)')
+# 7) only share links are exported, not standalone client configurations.
+$clientGen = [regex]::Matches($text, 'anytls-client\.json|cat > /etc/s-box/(sbox\.json|clmi\.yaml)|\b(sball|clall|sb_client|sbhy2ports)\s*\(\)')
 if ($clientGen.Count) {
   $errors += "client config generation code reappeared ($($clientGen.Count) hits)"
 }
@@ -174,7 +173,7 @@ if ($text -notmatch 'Vless-reality\uFF1ATCP \$port_vl_re' -or
   $errors += 'install no longer prints the VLESS/Hysteria2 inbound port reminder'
 }
 # 9) GitLab publishing and Telegram push must stay removed; "变更配置"
-#    keeps the 6 retained interaction points, and the inbound/outbound IP
+#    keeps the 6 retained interaction points plus adding AnyTLS, and the inbound/outbound IP
 #    switches live in the main-menu 12 entry.
 $pushHits = [regex]::Matches($text, '(?i)gitlab|telegram|TG通知|电报|sbtg\.sh|gitpush\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($pushHits) {
@@ -184,12 +183,12 @@ $cs = [regex]::Match($text, '(?ms)^changeserv\(\)\{.*?^\}')
 if (-not $cs.Success) {
   $errors += 'changeserv menu not found'
 } else {
-  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changefl', 'setobfs') {
+  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changefl', 'setobfs', 'addanytls') {
     if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
   }
   $csOpts = [regex]::Matches($cs.Value, '"\$menu"\s*=\s*"([0-9]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
-  if (($csOpts -join ',') -ne '1,2,3,4,5,6') {
-    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5,6)"
+  if (($csOpts -join ',') -ne '1,2,3,4,5,6,7') {
+    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5,6,7)"
   }
 }
 
@@ -228,6 +227,9 @@ if ($nodeFrag -ne 2) {
 }
 if ($text -match '#(?:vl-reality|hy2)-\$sbnode') {
   $errors += 'share links re-added a hard-coded protocol prefix in front of the node name'
+}
+if (-not $text.Contains('#\($name | @uri)"') -or -not $text.Contains('cat /etc/s-box/anytls.txt 2>/dev/null >> /etc/s-box/jhdy.txt')) {
+  $errors += 'AnyTLS share link lost its encoded node name or aggregate entry'
 }
 
 # 12b) node name keeps spaces: the input handlers must not rewrite spaces to dashes.

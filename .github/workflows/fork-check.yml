@@ -24,3 +24,6 @@ jobs:
       - name: server config templates (render-configs.ps1)
         shell: pwsh
         run: ./tools/render-configs.ps1
+
+      - name: AnyTLS config transformations
+        run: python3 tools/test-anytls.py

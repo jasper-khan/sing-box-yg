@@ -266,7 +266,67 @@ chooseport || return 1
 port_hy2=$port
 }
 
+anytlsversion(){
+[[ $1 =~ ^([0-9]+)\.([0-9]+)\. ]] && (( BASH_REMATCH[1] > 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] >= 12) ))
+}
+
+randomport(){
+while true; do
+port=$(shuf -i 10000-65535 -n 1)
+if [[ " $* " != *" $port "* ]] && \
+[[ -z $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] && \
+[[ -z $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]]; then
+return 0
+fi
+done
+}
+
+anytlsport(){
+while true; do
+readp "\n设置AnyTLS + REALITY端口 (回车随机生成，0返回)：" port || return 1
+chooseport || return 1
+if [[ " $* " == *" $port "* ]]; then
+red "端口已在节点配置中使用，请重新选择"
+else
+return 0
+fi
+done
+}
+
+addanytls(){
+if ! anytlsversion "$(/etc/s-box/sing-box version | awk '/version/{print $NF}')"; then
+yellow "AnyTLS 需要 1.12 及以上内核，请先通过菜单 7 升级内核"
+return 1
+fi
+if jq -e '.inbounds[] | select(.type == "anytls")' /etc/s-box/sb.json >/dev/null; then
+yellow "AnyTLS + REALITY 已添加，可通过菜单 4 修改端口、菜单 8 查看节点"
+return 0
+fi
+if [[ $1 = install ]]; then
+port=$port_anytls
+else
+randomport $(jq -r '.inbounds[].listen_port' /etc/s-box/sb.json)
+fi
+local f
+for f in /etc/s-box/sb11.json /etc/s-box/sb.json; do
+if ! jq --argjson p "$port" '.inbounds[0] as $v | .inbounds += [{type:"anytls", tag:"anytls-sb", listen:$v.listen, listen_port:$p, users:[{name:"anytls", password:$v.users[0].uuid}], tls:$v.tls}] | (.route.rules[] | select(.outbound == "lan-ss-out" or .outbound == "public-vless-out") | .inbound) += ["anytls-sb"]' "$f" > "$f.tmp" || ! /etc/s-box/sing-box check -c "$f.tmp"; then
+rm -f /etc/s-box/sb11.json.tmp
+rm -f /etc/s-box/sb.json.tmp
+red "AnyTLS 配置校验失败，原配置未改动"
+return 1
+fi
+done
+for f in /etc/s-box/sb11.json /etc/s-box/sb.json; do mv "$f.tmp" "$f" || return 1; done
+if [[ $1 != install ]]; then
+yellow "请在 VPS 防火墙与云安全组放行 AnyTLS + REALITY：TCP $port"
+restartsb && sbshare
+fi
+}
+
 insport(){
+local count=2
+port_anytls=
+anytlsversion "$sbnh.0" && count=3
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 green "三、设置各个协议端口"
 yellow "1：自动生成每个协议的随机端口 (10000-65535范围内)，回车默认"
@@ -274,29 +334,29 @@ yellow "2：自定义每个协议端口"
 readchoice "请输入【1-2】：" port '^[12]?$' || return 1
 if [ -z "$port" ] || [ "$port" = "1" ] ; then
 ports=()
-for i in {1..2}; do
-while true; do
-port=$(shuf -i 10000-65535 -n 1)
-if ! [[ " ${ports[@]} " =~ " $port " ]] && \
-[[ -z $(ss -tunlp | grep -w tcp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]] && \
-[[ -z $(ss -tunlp | grep -w udp | awk '{print $5}' | sed 's/.*://g' | grep -w "$port") ]]; then
+for ((i=0; i<count; i++)); do
+randomport "${ports[@]}"
 ports+=($port)
-break
-fi
-done
 done
 port_vl_re=${ports[0]}
 port_hy2=${ports[1]}
+port_anytls=${ports[2]}
 else
 vlport && hy2port || return 1
+if [[ $count = 3 ]]; then
+anytlsport "$port_vl_re" "$port_hy2" || return 1
+port_anytls=$port
+fi
 fi
 echo
 blue "各协议端口确认如下"
 blue "Vless-reality端口：$port_vl_re"
 blue "Hysteria-2端口：$port_hy2"
+[[ -n $port_anytls ]] && blue "AnyTLS + REALITY端口：$port_anytls"
 yellow "请在 VPS 防火墙与云安全组放行以下入站流量："
 yellow "Vless-reality：TCP $port_vl_re"
 yellow "Hysteria-2：UDP $port_hy2"
+[[ -n $port_anytls ]] && yellow "AnyTLS + REALITY：TCP $port_anytls"
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 green "四、自动生成各个协议统一的uuid (密码)"
 uuid=$(/etc/s-box/sing-box generate uuid)
@@ -844,6 +904,9 @@ echo "$public_key" > /etc/s-box/public.key
 short_id=$(/etc/s-box/sing-box generate rand --hex 4)
 warpwg
 inssbjsonser
+if [[ -n $port_anytls ]]; then
+addanytls install || return 1
+fi
 sbservice
 sbactive || return 1
 newv=$(curl -fsSL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main/version | awk -F "更新内容" '{print $1}' | head -n 1)
@@ -923,20 +986,21 @@ vl_na="当前伪装域名：$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.s
 green "$vl_na"
 autoym
 ym_auto=$ym_vl_re
-readp "检测到城市：${sb_city:-未识别}，自动选择的伪装域名：$ym_auto\n请输入新的VLESS/Hy2伪装域名 (回车使用上面自动选择的域名，0返回)：" ym_vl_re || return 1
+readp "检测到城市：${sb_city:-未识别}，自动选择的伪装域名：$ym_auto\n请输入新的VLESS/Hy2/AnyTLS伪装域名 (回车使用上面自动选择的域名，0返回)：" ym_vl_re || return 1
 [[ $ym_vl_re = 0 ]] && return
 ym_vl_re=${ym_vl_re:-$ym_auto}
 for f in $sbfiles; do
-jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v | (.inbounds[1].masquerade) = ("https://" + $v)' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v | (.inbounds[1].masquerade) = ("https://" + $v) | (.inbounds[] | select(.type == "anytls") | .tls) = .inbounds[0].tls' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
-blue "VLESS/Hy2伪装域名已更换为：$ym_vl_re"
-yellow "提醒：VLESS伪装域名变了，请到客户端更新VLESS节点信息（重新导入菜单 8 的分享链接），否则旧节点会连不上"
+blue "VLESS/Hy2/AnyTLS伪装域名已更换为：$ym_vl_re"
+yellow "提醒：请通过菜单 8 更新客户端的 VLESS 及 AnyTLS 节点，否则旧节点会连不上"
 sleep 3
 }
 allports(){
 vl_port=$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].listen_port')
 hy2_port=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].listen_port')
+anytls_port=$(jq -r '.inbounds[] | select(.type == "anytls") | .listen_port' /etc/s-box/sb.json)
 hy2_ports=$(for ipt in iptables ip6tables; do $ipt -t nat -nL SBHY2PORT --line 2>/dev/null | awk '/DNAT/{for(i=1;i<=NF;i++)if($i~/^dpts?:[0-9]/)print $i}'; done | sed 's/dpts://; s/dpt://' | awk '!a[$0]++' | tr '\n' ',' | sed 's/,$//')
 [[ -n $hy2_ports ]] && hy2zfport="$hy2_ports" || hy2zfport="未添加"
 }
@@ -1021,8 +1085,9 @@ green "Hysteria2支持更改主端口，也支持增删多个转发端口与端�
 echo
 green "1：Vless-reality协议 ${yellow}端口:$vl_port${plain}"
 green "2：Hysteria2协议 ${yellow}端口:$hy2_port  转发多端口: $hy2zfport${plain}"
+green "3：AnyTLS + REALITY ${yellow}端口:${anytls_port:-未添加}${plain}"
 green "0：返回上层"
-readchoice "请选择要变更端口的协议：" menu '^[0-2]?$' || return 1
+readchoice "请选择要变更端口的协议：" menu '^[0-3]?$' || return 1
 if [ "$menu" = "1" ]; then
 vlport || continue
 for f in $sbfiles; do
@@ -1031,6 +1096,17 @@ done
 restartsb && sbshare > /dev/null 2>&1
 blue "Vless-reality端口更改完成"
 echo
+elif [ "$menu" = "3" ]; then
+if [[ -z $anytls_port ]]; then
+yellow "请先通过菜单 3 → 7 添加 AnyTLS + REALITY"
+continue
+fi
+anytlsport $(jq -r '.inbounds[].listen_port' /etc/s-box/sb.json) || continue
+for f in /etc/s-box/sb11.json /etc/s-box/sb.json; do
+jq --argjson p "$port" '(.inbounds[] | select(.type == "anytls") | .listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+restartsb && sbshare > /dev/null 2>&1
+yellow "AnyTLS 端口已更改，请放行 TCP $port，并通过菜单 8 更新客户端节点"
 elif [ "$menu" = "2" ]; then
 while true; do
 allports
@@ -1103,7 +1179,7 @@ fi
 break
 done
 for f in $sbfiles; do
-jq --arg u "$uuid" '(.inbounds[0].users[0].uuid) = $u | (.inbounds[1].users[0].password) = $u' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+jq --arg u "$uuid" '(.inbounds[0].users[0].uuid) = $u | (.inbounds[1].users[0].password) = $u | (.inbounds[] | select(.type == "anytls") | .users[0].password) = $u' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
 blue "已确认uuid (密码)：${uuid}"
@@ -1259,7 +1335,7 @@ sbactive || return 1
 while true; do
 echo
 green "Sing-box配置变更选择如下:"
-readchoice "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：设置域名分流（WARP-WireGuard / VPS直连）\n6：设置Hy2混淆（salamander，防QUIC特征被识别）\n0：返回上层\n请选择【0-6】：" menu '^[0-6]?$' || return 1
+readchoice "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：设置域名分流（WARP-WireGuard / VPS直连）\n6：设置Hy2混淆（salamander，防QUIC特征被识别）\n7：添加AnyTLS + REALITY节点\n0：返回上层\n请选择【0-7】：" menu '^[0-7]?$' || return 1
 if [ "$menu" = "1" ];then
 setcert
 elif [ "$menu" = "2" ];then
@@ -1272,6 +1348,8 @@ elif [ "$menu" = "5" ];then
 changefl
 elif [ "$menu" = "6" ];then
 setobfs
+elif [ "$menu" = "7" ];then
+addanytls
 else 
 return
 fi
@@ -1406,6 +1484,10 @@ else
 return
 fi
 if [[ -n $upcore ]]; then
+if jq -e '.inbounds[] | select(.type == "anytls")' /etc/s-box/sb11.json >/dev/null && ! anytlsversion "$upcore"; then
+red "已配置 AnyTLS，不能切换到 1.12 以下内核"
+continue
+fi
 green "开始下载并更新Sing-box内核……请稍等"
 sbname="sing-box-$upcore-linux-$cpu"
 rm -rf /etc/s-box/sing-box.tar.gz /etc/s-box/$sbname
@@ -1477,11 +1559,26 @@ return 1
 fi
 }
 
+resanytls(){
+: > /etc/s-box/anytls.txt
+if ! jq -e '.inbounds[] | select(.type == "anytls")' /etc/s-box/sb.json >/dev/null; then return 0; fi
+jq -r --arg server "$server_ip" --arg key "$public_key" --arg name "$sbnode" '
+.inbounds[] | select(.type == "anytls") |
+"anytls://\(.users[0].password | @uri)@\($server):\(.listen_port)?security=reality&sni=\(.tls.server_name | @uri)&fp=firefox&pbk=\($key | @uri)&sid=\(.tls.reality.short_id[0] | @uri)#\($name | @uri)"
+' /etc/s-box/sb.json > /etc/s-box/anytls.txt || return 1
+red "🚀【 AnyTLS + REALITY 】节点信息如下："
+yellow "分享链接及二维码【支持此组合的客户端，如 v2rayN 使用 sing-box 内核；Mihomo 不支持】"
+cat /etc/s-box/anytls.txt
+qrencode -o - -t ANSIUTF8 "$(cat /etc/s-box/anytls.txt)"
+}
+
 sbshare(){
 : > /etc/s-box/jhdy.txt
 result_vl_hy2 && resvless && reshy2
+resanytls
 cat /etc/s-box/vl_reality.txt 2>/dev/null >> /etc/s-box/jhdy.txt
 cat /etc/s-box/hy2.txt 2>/dev/null >> /etc/s-box/jhdy.txt
+cat /etc/s-box/anytls.txt 2>/dev/null >> /etc/s-box/jhdy.txt
 v2sub=$(cat /etc/s-box/jhdy.txt 2>/dev/null)
 echo
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -1515,12 +1612,13 @@ hy2_sniname=$(cat /etc/s-box/sb.json | jq -r '.inbounds[1].tls.key_path')
 echo -e "Sing-box节点关键信息如下："
 echo -e "🚀【 Vless-reality 】${yellow}端口:$vl_port  Reality域名证书伪装地址：$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')${plain}"
 echo -e "🚀【  Hysteria-2   】${yellow}端口:$hy2_port  证书形式:$hy2_zs  转发多端口: $hy2zfport${plain}"
+[[ -n $anytls_port ]] && echo -e "🚀【 AnyTLS + REALITY 】${yellow}端口:$anytls_port  伪装域名跟随 VLESS${plain}"
 echo "------------------------------------------------------------------------------------"
 }
 
 sbsm(){
 echo
-blue "本 fork 仅保留 vless-reality 与 hysteria2 两个协议"
+blue "本 fork 支持 VLESS + REALITY、Hysteria2、AnyTLS + REALITY（需 1.12 及以上内核）"
 blue "项目地址与使用说明：https://github.com/jasper-khan/sing-box-yg"
 echo
 }
@@ -1617,7 +1715,7 @@ if $role == "landing" then
 elif $role == "relay" or $role == "public" then
 (if $role == "public" then $public[0] else {type:"shadowsocks", tag:"lan-ss-out", server:$host, server_port:$port, method:"none", password:""} end) as $out |
 .outbounds += [$out] |
-.route.rules = [{inbound:[.inbounds[] | select(.type == "vless" or .type == "hysteria2") | .tag], outbound:$out.tag}] + .route.rules
+.route.rules = [{inbound:[.inbounds[] | select(.type == "vless" or .type == "hysteria2" or .type == "anytls") | .tag], outbound:$out.tag}] + .route.rules
 else . end
 ' "$backup/$name.json" > "$backup/$name.new.json" || exit 1
 done
@@ -1734,13 +1832,13 @@ mainmenu(){
 while true; do
 clear
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 
-white "Vless-reality-vision、Hysteria2 双协议共存脚本"
+white "VLESS + REALITY、Hysteria2、AnyTLS + REALITY 共存脚本"
 white "脚本快捷方式：sb"
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 green " 1. 一键安装 Sing-box" 
 green " 2. 删除卸载 Sing-box"
 white "----------------------------------------------------------------------------------"
-green " 3. 变更配置 【证书/名称/域名/UUID/分流/混淆】"
+green " 3. 变更配置 【证书/名称/域名/UUID/分流/混淆/添加AnyTLS】"
 green " 4. 更改主端口/添加多端口跳跃复用" 
 green " 5. 启动/关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"
