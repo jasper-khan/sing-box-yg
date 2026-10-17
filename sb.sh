@@ -319,8 +319,6 @@ done
 for f in /etc/s-box/sb11.json /etc/s-box/sb.json; do mv "$f.tmp" "$f" || return 1; done
 if [[ $1 != install ]]; then
 yellow "请在 VPS 防火墙与云安全组放行 AnyTLS + REALITY：TCP $port"
-[[ $1 = upgrade ]] && return 0
-restartsb && sbshare
 fi
 }
 
@@ -1107,7 +1105,7 @@ blue "Vless-reality端口更改完成"
 echo
 elif [ "$menu" = "3" ]; then
 if [[ -z $anytls_port ]]; then
-yellow "请先通过菜单 3 → 7 添加 AnyTLS + REALITY"
+yellow "当前配置没有 AnyTLS 节点，无法修改端口"
 continue
 fi
 anytlsport $(jq -r '.inbounds[].listen_port' /etc/s-box/sb.json) || continue
@@ -1344,7 +1342,7 @@ sbactive || return 1
 while true; do
 echo
 green "Sing-box配置变更选择如下:"
-readchoice "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：设置域名分流（WARP-WireGuard / VPS直连）\n6：设置Hy2混淆（salamander，防QUIC特征被识别）\n7：添加AnyTLS + REALITY节点\n0：返回上层\n请选择【0-7】：" menu '^[0-7]?$' || return 1
+readchoice "1：设置Hysteria2证书路径（自己申请的证书）\n2：设置节点名称\n3：更换Reality域名伪装地址\n4：更换全协议UUID(密码)\n5：设置域名分流（WARP-WireGuard / VPS直连）\n6：设置Hy2混淆（salamander，防QUIC特征被识别）\n0：返回上层\n请选择【0-6】：" menu '^[0-6]?$' || return 1
 if [ "$menu" = "1" ];then
 setcert
 elif [ "$menu" = "2" ];then
@@ -1357,8 +1355,6 @@ elif [ "$menu" = "5" ];then
 changefl
 elif [ "$menu" = "6" ];then
 setobfs
-elif [ "$menu" = "7" ];then
-addanytls
 else 
 return
 fi
@@ -1859,7 +1855,7 @@ red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 green " 1. 一键安装 Sing-box" 
 green " 2. 删除卸载 Sing-box"
 white "----------------------------------------------------------------------------------"
-green " 3. 变更配置 【证书/名称/域名/UUID/分流/混淆/添加AnyTLS】"
+green " 3. 变更配置 【证书/名称/域名/UUID/分流/混淆】"
 green " 4. 更改主端口/添加多端口跳跃复用" 
 green " 5. 启动/关闭/重启 Sing-box"
 green " 6. 更新 Sing-box-yg 脚本"

@@ -173,7 +173,7 @@ if ($text -notmatch 'Vless-reality\uFF1ATCP \$port_vl_re' -or
   $errors += 'install no longer prints the VLESS/Hysteria2 inbound port reminder'
 }
 # 9) GitLab publishing and Telegram push must stay removed; "变更配置"
-#    keeps the 6 retained interaction points plus adding AnyTLS, and the inbound/outbound IP
+#    keeps the 6 retained interaction points, and the inbound/outbound IP
 #    switches live in the main-menu 12 entry.
 $pushHits = [regex]::Matches($text, '(?i)gitlab|telegram|TG通知|电报|sbtg\.sh|gitpush\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique
 if ($pushHits) {
@@ -183,12 +183,12 @@ $cs = [regex]::Match($text, '(?ms)^changeserv\(\)\{.*?^\}')
 if (-not $cs.Success) {
   $errors += 'changeserv menu not found'
 } else {
-  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changefl', 'setobfs', 'addanytls') {
+  foreach ($fn in 'setcert', 'setname', 'changeym', 'changeuuid', 'changefl', 'setobfs') {
     if ($cs.Value -notmatch "\b$fn\b") { $errors += "config-change menu lost $fn" }
   }
   $csOpts = [regex]::Matches($cs.Value, '"\$menu"\s*=\s*"([0-9]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
-  if (($csOpts -join ',') -ne '1,2,3,4,5,6,7') {
-    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5,6,7)"
+  if (($csOpts -join ',') -ne '1,2,3,4,5,6') {
+    $errors += "changeserv options changed: $($csOpts -join ',') (expected 1,2,3,4,5,6)"
   }
 }
 
