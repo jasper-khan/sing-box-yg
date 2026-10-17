@@ -28,7 +28,7 @@ def jq(data, expression, **args):
 
 
 add = filter_in("addanytls", "--argjson p \"$port\" '")
-domain = filter_in("changeym", "--arg v \"$ym_vl_re\" '")
+domain = filter_in("setym", "--arg v \"$ym_vl_re\" '")
 password = filter_in("changeuuid", "--arg u \"$uuid\" '")
 port = source.split("changeport(){", 1)[1].split("--argjson p \"$port\" '", 1)[1].split("'", 1)[0]
 export = filter_in("resanytls", "--arg name \"$sbnode\" '")

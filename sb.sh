@@ -319,6 +319,7 @@ done
 for f in /etc/s-box/sb11.json /etc/s-box/sb.json; do mv "$f.tmp" "$f" || return 1; done
 if [[ $1 != install ]]; then
 yellow "请在 VPS 防火墙与云安全组放行 AnyTLS + REALITY：TCP $port"
+[[ $1 = upgrade ]] && return 0
 restartsb && sbshare
 fi
 }
@@ -914,6 +915,7 @@ newv=$(curl -fsSL https://raw.githubusercontent.com/jasper-khan/sing-box-yg/main
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 lnsb && blue "Sing-box-yg脚本安装成功，脚本快捷方式：sb"
 echo
+touch /etc/s-box/upgrade-fork44
 ipuuid || return 1
 sbshare
 red "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -980,6 +982,15 @@ return
 done
 }
 
+setym(){
+local f
+for f in $sbfiles; do
+jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v | (.inbounds[1].masquerade) = ("https://" + $v) | (.inbounds[] | select(.type == "anytls") | .tls) = .inbounds[0].tls' "$f" > "$f.tmp" || return 1
+done
+/etc/s-box/sing-box check -c /etc/s-box/sb.json.tmp || return 1
+for f in $sbfiles; do mv "$f.tmp" "$f" || return 1; done
+}
+
 changeym(){
 echo
 vl_na="当前伪装域名：$(cat /etc/s-box/sb.json | jq -r '.inbounds[0].tls.server_name')"
@@ -989,9 +1000,7 @@ ym_auto=$ym_vl_re
 readp "检测到城市：${sb_city:-未识别}，自动选择的伪装域名：$ym_auto\n请输入新的VLESS/Hy2/AnyTLS伪装域名 (回车使用上面自动选择的域名，0返回)：" ym_vl_re || return 1
 [[ $ym_vl_re = 0 ]] && return
 ym_vl_re=${ym_vl_re:-$ym_auto}
-for f in $sbfiles; do
-jq --arg v "$ym_vl_re" '(.inbounds[0].tls.server_name) = $v | (.inbounds[0].tls.reality.handshake.server) = $v | (.inbounds[1].masquerade) = ("https://" + $v) | (.inbounds[] | select(.type == "anytls") | .tls) = .inbounds[0].tls' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-done
+setym || { red "伪装域名配置校验失败，原配置未改动"; return 1; }
 restartsb && sbshare > /dev/null 2>&1
 blue "VLESS/Hy2/AnyTLS伪装域名已更换为：$ym_vl_re"
 yellow "提醒：请通过菜单 8 更新客户端的 VLESS 及 AnyTLS 节点，否则旧节点会连不上"
@@ -1428,6 +1437,17 @@ red "下载脚本失败或语法校验不通过，已保留原有脚本" && retu
 fi
 }
 
+upgradeconfig(){
+[[ -f /etc/s-box/sb.json && ! -f /etc/s-box/upgrade-fork44 ]] || return 0
+anytlsversion "$sbnh.0" || { yellow "请先通过菜单 7 升级至 1.12 及以上内核，完成后自动同步旧安装配置"; return 0; }
+autoym
+setym || return 1
+addanytls upgrade || return 1
+restartsb && sbshare >/dev/null 2>&1 || return 1
+touch /etc/s-box/upgrade-fork44 || return 1
+yellow "旧安装已自动同步（城市：${sb_city:-未识别}，伪装域名：$ym_vl_re），请通过菜单 8 更新客户端节点信息"
+}
+
 upsbyg(){
 if [[ ! -f '/usr/bin/sb' ]]; then
 red "未正常安装Sing-box-yg"
@@ -1831,6 +1851,7 @@ done
 mainmenu(){
 while true; do
 clear
+upgradeconfig || red "旧安装配置自动同步失败，请检查上方错误后重试"
 white "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 
 white "VLESS + REALITY、Hysteria2、AnyTLS + REALITY 共存脚本"
 white "脚本快捷方式：sb"
