@@ -169,7 +169,7 @@ c=$(printf '%s' "$sb_city" | tr 'A-Z' 'a-z')
 case "$c" in
 *"los angeles"*) ym_vl_re=www.compton.edu ;;
 *"san jose"*|*"santa clara"*|*sunnyvale*|*"mountain view"*|*"palo alto"*|*"san francisco"*|*"los altos"*) ym_vl_re=foothill.edu ;;
-*"hong kong"*) ym_vl_re=www.ust.hk ;;
+*"hong kong"*) ym_vl_re=www.hkapa.edu ;;
 *tokyo*) ym_vl_re=www.tnm.jp ;;
 *seattle*) ym_vl_re=www.eskimo.com ;;
 *dallas*) ym_vl_re=unt.edu ;;

@@ -18,7 +18,7 @@ $lines  = $text -split '\r?\n'
 # 1) ym_vl_re assignments must stay inside the fork's list: the static default is
 #    upstream's apple.com, every other assignment is a city-table domain, and all
 #    city-table domains must still be present (upstream edits show up here).
-$cityYms = 'www.compton.edu', 'foothill.edu', 'www.ust.hk', 'www.tnm.jp', 'www.eskimo.com',
+$cityYms = 'www.compton.edu', 'foothill.edu', 'www.hkapa.edu', 'www.tnm.jp', 'www.eskimo.com',
            'unt.edu', 'adelphi.edu', 'www.osaka-u.ac.jp', 'uos.ac.kr', 'a-star.edu.sg',
            'www.ntust.edu.tw', 'uni-frankfurt.de', 'vu.nl', 'kew.org', 'inria.fr'
 $assigns = @()

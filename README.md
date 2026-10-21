@@ -21,7 +21,7 @@
 * 本地IP订阅（busybox httpd 订阅服务）已删除：不再有 `subport.log` / `subtoken.log` / `/root/websbox`，也不会占额外端口。
 * GitLab 订阅发布与 Telegram 推送已删除：脚本里不再有这两项功能，“变更配置”菜单有 6 项（证书路径 / 节点名称 / Reality 域名 / UUID / 域名分流 / Hy2 混淆），出入站 IPv4/IPv6 切换统一收在主菜单 12，依赖里也不再安装 `git`、`expect`。
 * 节点名称：安装时会问一次（回车 = 默认主机名），装完可用菜单 `3` → `2` 随时修改（输入 `0` 恢复默认主机名）。客户端里显示的就是你输入的名字（空格保留，不再替换成 `-`；只去掉 `#`），**不会再自动加 `vl-reality-` / `hy2-` 前缀**；各协议节点同名，靠协议与端口区分。改完自动刷新分享链接。
-* vless-reality 的 SNI/伪装域名按城市自动选择：安装时读取 ipwho.is 返回的 `city`，命中内置城市表（洛杉矶 `www.compton.edu`、湾区 `foothill.edu`、香港 `www.ust.hk`、东京 `www.tnm.jp`、西雅图 `www.eskimo.com`、达拉斯 `unt.edu`、纽约 `adelphi.edu`、大阪 `www.osaka-u.ac.jp`、首尔 `uos.ac.kr`、新加坡 `a-star.edu.sg`、台北 `www.ntust.edu.tw`、法兰克福 `uni-frankfurt.de`、阿姆斯特丹 `vu.nl`、伦敦 `kew.org`、巴黎 `inria.fr`）就用对应域名；表外城市或查询失败用上游默认 `apple.com`。安装时不询问（只打印选中结果），需要更换用菜单 `3` → `3`，回车即用自动选中的域名；改完会提示到客户端更新节点信息（重新导入分享链接），旧节点的 SNI 不变会连不上。
+* vless-reality 的 SNI/伪装域名按城市自动选择：安装时读取 ipwho.is 返回的 `city`，命中内置城市表（洛杉矶 `www.compton.edu`、湾区 `foothill.edu`、香港 `www.hkapa.edu`、东京 `www.tnm.jp`、西雅图 `www.eskimo.com`、达拉斯 `unt.edu`、纽约 `adelphi.edu`、大阪 `www.osaka-u.ac.jp`、首尔 `uos.ac.kr`、新加坡 `a-star.edu.sg`、台北 `www.ntust.edu.tw`、法兰克福 `uni-frankfurt.de`、阿姆斯特丹 `vu.nl`、伦敦 `kew.org`、巴黎 `inria.fr`）就用对应域名；表外城市或查询失败用上游默认 `apple.com`。安装时不询问（只打印选中结果），需要更换用菜单 `3` → `3`，回车即用自动选中的域名；改完会提示到客户端更新节点信息（重新导入分享链接），旧节点的 SNI 不变会连不上。
 * 自己申请的 Hysteria2 证书：用菜单 `3` → `1`（或主菜单 `11`）填写证书文件路径与私钥文件路径，脚本会校验文件存在、写入配置并重启服务。不填就继续用自签证书。
 * Hy2 防探测与混淆：两个内核模板的 hysteria2 端口默认带 `masquerade: https://foothill.edu`（探测请求反代 foothill.edu，不再裸回 404）；salamander 混淆默认开启，安装时自动生成随机密码写入 sb10/sb11/sb.json，分享链接自动带 obfs 参数；菜单 `3` → `6` 可关闭或重置（改完自动刷新链接，客户端需重新导入）。
 * 脚本自更新、版本检查与安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
