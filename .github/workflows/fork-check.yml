@@ -27,3 +27,6 @@ jobs:
 
       - name: AnyTLS config transformations
         run: python3 tools/test-anytls.py
+
+      - name: AbuseGuard port callbacks
+        run: python3 tools/test-abuseguard.py

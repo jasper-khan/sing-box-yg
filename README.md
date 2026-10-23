@@ -8,7 +8,7 @@
 * AnyTLS 使用独立 TCP 端口，密码、REALITY 域名、密钥及 short ID 跟随 VLESS；默认填充策略不额外调整。新装选择自动分配时，一次生成三个互不重复且未被监听占用的端口；旧安装升级补加时自动避开已有配置和监听端口，不再询问。菜单 `4` → `3` 改端口，菜单 `8` 输出 `anytls://` 分享链接和二维码，并加入聚合节点。指纹 firefox，客户端连接池参数由客户端自身设置决定。链接适用于能识别 REALITY 参数的客户端，例如 v2rayN 使用 sing-box 内核；Mihomo 不支持此组合。已添加 AnyTLS 时禁止切换到 1.12 以下内核。
 * 支持纯 IPv4、纯 IPv6、双栈 VPS；amd64/arm64 架构；Alpine 系统下不支持查看运行日志。
 * 不再安装未使用的 `socat`，不再创建每日凌晨 1 点重启 sing-box 的任务。新脚本运行时只清理旧版创建的那条固定每日重启任务，保留其他 cron 内容；手动启停与 systemd 的异常退出自动重启保留。
-* 安装时不再询问或关闭服务器防火墙；端口确定后直接提示 VPS 防火墙/云安全组需要放行的 VLESS TCP、Hysteria2 UDP 与 AnyTLS TCP 入站端口。
+* 安装时不再询问或关闭服务器防火墙。已安装 AbuseGuard 的机器上，新建节点、修改端口及设置内网落地入口时，会调用 `ag --firewall-open` 自动保存并放行对应 TCP/UDP 端口；需先更新 AbuseGuard 至 v0.3.5 或以上。放行失败会停止对应配置变更并报错；未安装 AbuseGuard 时沿用手动放行提示。仅处理本次明确指定的端口，不自动扫描服务或关闭旧端口；云安全组仍需自行设置。
 * 安装 `iptables-persistent` 前固定 IPv4/IPv6 规则保存选项为 No，不再出现两次保存询问，也不在安装时保存当前防火墙规则。该依赖仍用于用户主动设置 Hy2 多端口跳跃后的规则持久化。
 * 保留系统现有 DNS 管理方式：不自动安装或启用 `systemd-resolved`。同步上游 `4d5cce9`（2026-10-05）时已按此边界过滤其 DNS 服务安装改动。
 * WARP-WireGuard 出站（fork.11 起恢复）：安装时脚本用 openssl + curl 自动注册一个 Cloudflare WARP 账户（私钥 / IPv6 地址 / reserved 值），不依赖 python3、xxd；WARP-plus-Socks5、warp-plus 二进制、CFwarp 管理入口、端点 IP 优选一律不做。
@@ -25,8 +25,8 @@
 * 自己申请的 Hysteria2 证书：用菜单 `3` → `1`（或主菜单 `11`）填写证书文件路径与私钥文件路径，脚本会校验文件存在、写入配置并重启服务。不填就继续用自签证书。
 * Hy2 防探测与混淆：两个内核模板的 hysteria2 端口默认带 `masquerade: https://foothill.edu`（探测请求反代 foothill.edu，不再裸回 404）；salamander 混淆默认开启，安装时自动生成随机密码写入 sb10/sb11/sb.json，分享链接自动带 obfs 参数；菜单 `3` → `6` 可关闭或重置（改完自动刷新链接，客户端需重新导入）。
 * 脚本自更新、版本检查与安装命令均指向本 fork，避免"更新一次就被上游默认值覆盖"。
-* 链式代理（菜单 `14`）：支持内网与公网，由 sing-box 原生转发。内网落地选择网卡上的私网 IPv4 与端口，中转粘贴 `内网IP:端口`，经 SS none 连接落地；公网中转粘贴落地机的本 fork VLESS+Reality 完整链接，经 VLESS+Reality 连接落地。两种方式都把中转机 VLESS、Hy2、AnyTLS 的流量交给落地机，客户端直接使用中转机菜单 `8` 的节点。SS none 仅用于内网，不提供代理层加密或认证，仅绑定指定私网地址；脚本不修改防火墙。同一台机器只保留一条当前链路，切换时替换原链路。取消链路只移除本功能的入口、出站和路由规则，保留原有节点、分流与 WARP 设置。配置先校验，公网落地连接另做实际验证，应用失败自动恢复；`sb10.json`、`sb11.json` 与当前配置同步保存，切换内核不会丢失链路。
-* 仓库自带自动化守卫：`.github/workflows/fork-check.yml` 在每次 push / PR 自动跑 `bash -n sb.sh`、`fork-check.ps1`、`tools/render-configs.ps1` 与 `tools/test-anytls.py`。合并上游后如果这些 fork 边界被改丢（协议范围、城市伪装域名表与 `apple.com` 兜底、`fp=firefox`、WARP-WireGuard 结构、域名分流菜单、变更配置选项数等），GitHub 上会直接变成红灯，不会静默通过。
+* 链式代理（菜单 `14`）：支持内网与公网，由 sing-box 原生转发。内网落地选择网卡上的私网 IPv4 与端口，中转粘贴 `内网IP:端口`，经 SS none 连接落地；公网中转粘贴落地机的本 fork VLESS+Reality 完整链接，经 VLESS+Reality 连接落地。两种方式都把中转机 VLESS、Hy2、AnyTLS 的流量交给落地机，客户端直接使用中转机菜单 `8` 的节点。SS none 仅用于内网，不提供代理层加密或认证，仅绑定指定私网地址；已安装 AbuseGuard 时自动放行该入口的 TCP/UDP 端口。同一台机器只保留一条当前链路，切换时替换原链路。取消链路只移除本功能的入口、出站和路由规则，保留原有节点、分流与 WARP 设置。配置先校验，公网落地连接另做实际验证，应用失败自动恢复；`sb10.json`、`sb11.json` 与当前配置同步保存，切换内核不会丢失链路。
+* 仓库自带自动化守卫：`.github/workflows/fork-check.yml` 在每次 push / PR 自动跑 `bash -n sb.sh`、`fork-check.ps1`、`tools/render-configs.ps1`、`tools/test-anytls.py` 与 `tools/test-abuseguard.py`。合并上游后如果这些 fork 边界被改丢（协议范围、城市伪装域名表与 `apple.com` 兜底、`fp=firefox`、WARP-WireGuard 结构、域名分流菜单、变更配置选项数等），GitHub 上会直接变成红灯，不会静默通过。
 * 合并上游后运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ./fork-check.ps1`：退出码 0 表示这些不变量都还在——默认伪装域名、服务端模板结构、协议范围、自更新与版本 URL 全部归本 fork（含 `lnsb()`/`upsbyg()` 函数体内的 URL）、`version` 文件归本 fork、UUID 变更同步 hy2 密码、分享链接指纹 `fp=firefox`、“不再按行号改配置 / 不再生成旧版订阅配置”、“GitLab/Telegram 不得回流”、“本地IP订阅服务不得回流”、上游推广字样不得回流、WARP-WireGuard 通道结构（账户注册函数 + 两个模板的 wireguard 出站/分流域名规则 + 按 JSON 路径写入的分流菜单）、“变更配置菜单保持 6 项与主菜单 12 出入站菜单”与“socat 安装及每日重启创建不得回流”。
 * 服务端配置另可用 `tools/render-configs.ps1` 渲染校验：按 JSON 字段检查 Reality 的 `server_name` 与 `handshake.server` 默认值为 `apple.com`，不限制字段所在行号；基础模板 inbounds 为 `vless,hysteria2`，AnyTLS 由添加函数写入新内核配置；sb10 出站为 `direct`×5 + `wireguard` + `block`（含 4 条分流规则），sb11 出站为 `direct` + `endpoints` 的 wireguard（规则必须是 `sniff` + 4 组 resolve/outbound 对 + 兜底，共 10 条）。
 * 从 fork.11 之前的版本（含旧的多协议版本）升级：必须**先卸载再重装**。菜单 2 卸载后会删除 `/usr/bin/sb`，请重新执行本 README 的安装命令并选菜单 1。只点菜单 6"更新脚本"不会重建 `/etc/s-box/sb10.json`、`sb11.json`，也不会注册 WARP-WireGuard 账户（菜单 3 → 5 的域名分流会读到旧结构）；旧配置里残留的其它协议 inbound 不会被清理；卸载只清理本 fork 组件（sing-box 服务、`/etc/s-box`、`/usr/bin/sb`、旧版固定每日重启任务、SBHY2PORT 链、脚本目录的 `sbyg_update` 标记），不再处理旧版 Argo/WARP/websbox 等残留。
@@ -47,7 +47,7 @@
 2. **中转机**：运行 `sb` → `14` → `2`，在“填写落地机内网 IP+端口”提示处粘贴上述地址。脚本会先检查能否连接落地机；连接失败不修改现有配置。
 3. **客户端**：复制中转机 `sb` → `8` 的 VLESS 或 Hy2 节点。流量路径为：客户端 → 中转机公网节点 → 内网 SS none → 落地机 → 目标网站。
 
-菜单 `14` → `3` 查看本机角色与内网地址，`14` → `4` 取消本机链路。中转启用后，链路的域名分流、WARP 出口在落地机设置。若使用防火墙，落地的内网端口需允许中转内网地址访问 TCP/UDP。
+菜单 `14` → `3` 查看本机角色与内网地址，`14` → `4` 取消本机链路。中转启用后，链路的域名分流、WARP 出口在落地机设置。AbuseGuard 会自动放行落地内网入口的 TCP/UDP 端口；其他防火墙或云安全组需自行允许中转内网地址访问。
 
 ### 两台机器通过公网串联
 

@@ -237,6 +237,14 @@ echo
 blue "Vless-reality的SNI域名：$ym_vl_re（依据城市：${sb_city:-未识别}）"
 }
 
+agport(){
+[[ -x /usr/local/libexec/caddy-abuseguard ]] || return 0
+if ! /usr/local/bin/ag --firewall-open "$1" "$2"; then
+red "AbuseGuard 放行 $1/$2 失败，请先更新或检查 AbuseGuard 后重试"
+return 1
+fi
+}
+
 chooseport(){
 [[ -z $port ]] && port=$(shuf -i 10000-65535 -n 1)
 while true; do
@@ -307,6 +315,7 @@ port=$port_anytls
 else
 randomport $(jq -r '.inbounds[].listen_port' /etc/s-box/sb.json)
 fi
+agport tcp "$port" || return 1
 local f
 for f in /etc/s-box/sb11.json /etc/s-box/sb.json; do
 if ! jq --argjson p "$port" '.inbounds[0] as $v | .inbounds += [{type:"anytls", tag:"anytls-sb", listen:$v.listen, listen_port:$p, users:[{name:"anytls", password:$v.users[0].uuid}], tls:$v.tls}] | (.route.rules[] | select(.outbound == "lan-ss-out" or .outbound == "public-vless-out") | .inbound) += ["anytls-sb"]' "$f" > "$f.tmp" || ! /etc/s-box/sing-box check -c "$f.tmp"; then
@@ -318,7 +327,7 @@ fi
 done
 for f in /etc/s-box/sb11.json /etc/s-box/sb.json; do mv "$f.tmp" "$f" || return 1; done
 if [[ $1 != install ]]; then
-yellow "请在 VPS 防火墙与云安全组放行 AnyTLS + REALITY：TCP $port"
+yellow "请确认云安全组及其他防火墙放行 AnyTLS + REALITY：TCP $port"
 fi
 }
 
@@ -352,7 +361,7 @@ blue "各协议端口确认如下"
 blue "Vless-reality端口：$port_vl_re"
 blue "Hysteria-2端口：$port_hy2"
 [[ -n $port_anytls ]] && blue "AnyTLS + REALITY端口：$port_anytls"
-yellow "请在 VPS 防火墙与云安全组放行以下入站流量："
+yellow "需放行以下入站流量（已安装 AbuseGuard 时自动放行本机端口，云安全组仍需自行设置）："
 yellow "Vless-reality：TCP $port_vl_re"
 yellow "Hysteria-2：UDP $port_hy2"
 [[ -n $port_anytls ]] && yellow "AnyTLS + REALITY：TCP $port_anytls"
@@ -892,6 +901,7 @@ v6
 inssb || return 1
 inscertificate
 insport || return 1
+agport tcp "$port_vl_re" && agport udp "$port_hy2" || return 1
 insname
 sleep 2
 echo
@@ -1038,6 +1048,7 @@ if [[ $rangeport =~ ^([1-9][0-9]{3,4}:[1-9][0-9]{3,4})$ ]]; then
 b=${rangeport%%:*}
 c=${rangeport##*:}
 if [[ $b -ge 1000 && $b -le 65535 && $c -ge 1000 && $c -le 65535 && $b -lt $c ]]; then
+agport udp "$port" || return 1
 sbportjump
 iptables -t nat -A SBHY2PORT -p udp --dport $rangeport -j DNAT --to-destination :$port
 ip6tables -t nat -A SBHY2PORT -p udp --dport $rangeport -j DNAT --to-destination :$port
@@ -1059,6 +1070,7 @@ while true; do
 readp "\n请输入一个转发的端口 (1000-65535范围内，0返回)：" onlyport || return 1
 [[ $onlyport = 0 ]] && return 1
 if [[ $onlyport =~ ^[0-9]+$ && $onlyport -ge 1000 && $onlyport -le 65535 ]]; then
+agport udp "$port" || return 1
 sbportjump
 iptables -t nat -A SBHY2PORT -p udp --dport $onlyport -j DNAT --to-destination :$port
 ip6tables -t nat -A SBHY2PORT -p udp --dport $onlyport -j DNAT --to-destination :$port
@@ -1097,6 +1109,7 @@ green "0：返回上层"
 readchoice "请选择要变更端口的协议：" menu '^[0-3]?$' || return 1
 if [ "$menu" = "1" ]; then
 vlport || continue
+agport tcp "$port_vl_re" || continue
 for f in $sbfiles; do
 jq --argjson p "$port_vl_re" '(.inbounds[0].listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
@@ -1109,11 +1122,12 @@ yellow "当前配置没有 AnyTLS 节点，无法修改端口"
 continue
 fi
 anytlsport $(jq -r '.inbounds[].listen_port' /etc/s-box/sb.json) || continue
+agport tcp "$port" || continue
 for f in /etc/s-box/sb11.json /etc/s-box/sb.json; do
 jq --argjson p "$port" '(.inbounds[] | select(.type == "anytls") | .listen_port) = $p' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 restartsb && sbshare > /dev/null 2>&1
-yellow "AnyTLS 端口已更改，请放行 TCP $port，并通过菜单 8 更新客户端节点"
+yellow "AnyTLS 端口已更改，请确认云安全组及其他防火墙放行 TCP $port，并通过菜单 8 更新客户端节点"
 elif [ "$menu" = "2" ]; then
 while true; do
 allports
@@ -1124,6 +1138,7 @@ green "0：返回上层"
 readchoice "请选择【0-3】：" menu '^[0-3]?$' || return 1
 if [ "$menu" = "1" ]; then
 hy2port || continue
+agport udp "$port_hy2" || continue
 if [ -n "$hy2_ports" ]; then
 hy2deports
 fi
@@ -1698,6 +1713,7 @@ ip -4 -j addr show | jq -e --arg ip "$host" 'any(.[].addr_info[]; .local == $ip)
 if ! jq -e --arg ip "$host" --argjson p "$port" 'any(.inbounds[]; .tag == "lan-ss-in" and .listen == $ip and .listen_port == $p)' /etc/s-box/sb.json >/dev/null && [[ -n $(ss -H -lntu "sport = :$port") ]]; then
 red "端口 $port 已被占用，请换一个端口"; exit 1
 fi
+agport tcp "$port" && agport udp "$port" || exit 1
 elif [[ "$role" == relay ]]; then
 if ip -4 -j addr show | jq -e --arg ip "$host" 'any(.[].addr_info[]; .local == $ip)' >/dev/null; then
 red "落地地址不能是本机地址，未做修改"; exit 1
